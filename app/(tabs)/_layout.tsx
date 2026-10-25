@@ -5,10 +5,11 @@ import React from 'react';
 export default function TabLayout() {
   return (
     <Tabs
-      tabBar={() => <BottomNavBar />}
+      tabBar={(props) => <BottomNavBar {...props} />}
       screenOptions={{
         headerShown: false,
-      }}>
+      }}
+    >
       <Tabs.Screen
         name="index"
         options={{
@@ -18,7 +19,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="workouts"
         options={{
-          title: 'Workouts',
+          title: 'Training',
         }}
       />
       <Tabs.Screen
@@ -28,15 +29,15 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="progress"
+        name="profile"
         options={{
-          title: 'Progress',
+          title: 'Account',
         }}
       />
       <Tabs.Screen
-        name="profile"
+        name="progress"
         options={{
-          title: 'Profile',
+          href: null,
         }}
       />
       <Tabs.Screen

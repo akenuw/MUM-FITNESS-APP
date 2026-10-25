@@ -1,106 +1,176 @@
-import { Ionicons } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { router, usePathname } from 'expo-router';
 import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-export function BottomNavBar() {
-  const pathname = usePathname();
-  const insets = useSafeAreaInsets();
+interface TabItem {
+  routeName: string;
+  label: string;
+  iconName: keyof typeof MaterialCommunityIcons.glyphMap;
+  fallbackPath: string;
+}
 
-  const navItems = [
-    { name: 'Home', icon: 'home', route: '/(tabs)' },
-    { name: 'Workouts', icon: 'fitness', route: '/(tabs)/workouts' },
-    { name: 'Nutrition', icon: 'restaurant', route: '/(tabs)/nutrition' },
-    { name: 'Progress', icon: 'stats-chart', route: '/(tabs)/progress' },
-    { name: 'Profile', icon: 'person', route: '/(tabs)/profile' },
-  ];
+const TABS: TabItem[] = [
+  {
+    routeName: 'index',
+    label: 'Home',
+    iconName: 'home-outline',
+    fallbackPath: '/(tabs)',
+  },
+  {
+    routeName: 'workouts',
+    label: 'Training',
+    iconName: 'dumbbell',
+    fallbackPath: '/(tabs)/workouts',
+  },
+  {
+    routeName: 'nutrition',
+    label: 'Nutrition',
+    iconName: 'food-apple-outline',
+    fallbackPath: '/(tabs)/nutrition',
+  },
+  {
+    routeName: 'profile',
+    label: 'Account',
+    iconName: 'account-outline',
+    fallbackPath: '/(tabs)/profile',
+  },
+];
+
+const COLOR_BACKGROUND = '#080808';
+const COLOR_BORDER = '#222222';
+const COLOR_ACTIVE = '#FF5B6E'; // Reference-matched muted coral accent
+const COLOR_INACTIVE = '#A0A0A0'; // Clean muted gray
+
+export interface BottomNavBarProps {
+  state?: any;
+  navigation?: any;
+  descriptors?: any;
+}
+
+export function BottomNavBar(props?: BottomNavBarProps) {
+  const insets = useSafeAreaInsets();
+  const currentPathname = usePathname();
+
+  const state = props?.state;
+  const navigation = props?.navigation;
 
   return (
-    <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, 12) }]}>
-      {navItems.map((item) => {
-        const isSelected =
-          pathname === item.route ||
-          (item.route === '/(tabs)' && (pathname === '/' || pathname === '/(tabs)'));
+    <View
+      style={[
+        styles.container,
+        {
+          paddingBottom: Math.max(insets.bottom, Platform.OS === 'ios' ? 12 : 8),
+        },
+      ]}
+    >
+      <View style={styles.tabRow}>
+        {TABS.map((tab) => {
+          let isActive = false;
 
-        return (
-          <TouchableOpacity
-            key={item.name}
-            style={styles.navItem}
-            activeOpacity={0.7}
-            onPress={() => router.replace(item.route as any)}
-          >
-            <View style={[styles.iconWrapper, isSelected && styles.iconWrapperActive]}>
-              <Ionicons
-                name={isSelected ? (`${item.icon}` as any) : (`${item.icon}-outline` as any)}
-                size={22}
-                color={isSelected ? '#FF6A3D' : '#64748B'}
-              />
-            </View>
-            <Text
-              style={[
-                styles.navText,
-                isSelected ? styles.navTextSelected : styles.navTextInactive
-              ]}
-              numberOfLines={1}
+          if (state) {
+            const activeRoute = state.routes[state.index];
+            isActive = activeRoute ? activeRoute.name === tab.routeName : false;
+          } else {
+            isActive =
+              currentPathname === tab.fallbackPath ||
+              (tab.fallbackPath === '/(tabs)' &&
+                (currentPathname === '/' || currentPathname === '/(tabs)'));
+          }
+
+          const handlePress = () => {
+            if (navigation && state) {
+              const targetRoute = state.routes.find((r: any) => r.name === tab.routeName);
+              if (targetRoute) {
+                const event = navigation.emit({
+                  type: 'tabPress',
+                  target: targetRoute.key,
+                  canPreventDefault: true,
+                });
+
+                if (!isActive && !event.defaultPrevented) {
+                  navigation.navigate(targetRoute.name);
+                }
+                return;
+              }
+            }
+
+            // Fallback navigation
+            router.replace(tab.fallbackPath as any);
+          };
+
+          return (
+            <TouchableOpacity
+              key={tab.routeName}
+              style={styles.tabItem}
+              activeOpacity={0.7}
+              onPress={handlePress}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: isActive }}
+              accessibilityLabel={tab.label}
             >
-              {item.name}
-            </Text>
-          </TouchableOpacity>
-        );
-      })}
+              <View style={styles.iconContainer}>
+                <MaterialCommunityIcons
+                  name={tab.iconName}
+                  size={21}
+                  color={isActive ? COLOR_ACTIVE : COLOR_INACTIVE}
+                />
+              </View>
+              <Text
+                style={[
+                  styles.tabLabel,
+                  { color: isActive ? COLOR_ACTIVE : COLOR_INACTIVE },
+                ]}
+                numberOfLines={1}
+              >
+                {tab.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-    paddingTop: 8,
-    width: '100%',
-    justifyContent: 'space-around',
-    alignItems: 'center',
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: -3 },
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 12,
+    backgroundColor: COLOR_BACKGROUND,
+    borderTopWidth: 1,
+    borderTopColor: COLOR_BORDER,
+    width: '100%',
+    paddingTop: 8,
   },
-  navItem: {
+  tabRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    width: '100%',
+  },
+  tabItem: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 4,
-    minHeight: 46,
+    paddingVertical: 2,
+    minHeight: 44, // Accessible touch target
   },
-  iconWrapper: {
-    width: 36,
-    height: 30,
-    borderRadius: 15,
+  iconContainer: {
     alignItems: 'center',
     justifyContent: 'center',
+    height: 22,
+    marginBottom: 3,
   },
-  iconWrapperActive: {
-    backgroundColor: '#FFF4EE',
-  },
-  navText: {
-    fontSize: 11,
-    marginTop: 2,
+  tabLabel: {
+    fontSize: 10,
     fontWeight: '500',
-    letterSpacing: 0.2,
-  },
-  navTextSelected: {
-    color: '#FF6A3D',
-    fontWeight: '700',
-  },
-  navTextInactive: {
-    color: '#64748B',
+    letterSpacing: 0.1,
+    textAlign: 'center',
   },
 });
+
+export default BottomNavBar;
