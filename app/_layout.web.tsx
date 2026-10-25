@@ -1,45 +1,22 @@
+import '@/utils/polyfills';
+
 import { useFonts } from 'expo-font';
-import { DarkTheme, DefaultTheme, Stack, ThemeProvider, router } from 'expo-router';
+import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useState } from 'react';
-import 'react-native-reanimated';
+import React, { useEffect } from 'react';
 
-import { OnboardingScreen } from '@/components/OnboardingScreen';
-import { SplashScreen } from '@/components/SplashScreen';
-import { useColorScheme } from '@/hooks/useColorScheme';
-
-// This is a web-specific layout that handles browser extensions better
-export default function RootLayout() {
-  const colorScheme = useColorScheme();
+export default function WebRootLayout() {
   const [loaded] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
   });
 
-  // State to track app initialization stages
-  const [showSplash, setShowSplash] = useState(true);
-  const [showOnboarding, setShowOnboarding] = useState(true);
-
-  // Simulate splash screen timing
-  useEffect(() => {
-    if (loaded) {
-      // Show splash for 4 seconds to ensure animation completes
-      // The last letter appears at ~2.25s (500ms initial delay + 7*250ms letter delays)
-      // Plus ~1s for the drop animation and ~0.75s buffer
-      const timer = setTimeout(() => {
-        setShowSplash(false);
-      }, 4000);
-
-      return () => clearTimeout(timer);
-    }
-  }, [loaded]);
-
-  // Handle errors from browser extensions
   useEffect(() => {
     const handleError = (event: ErrorEvent) => {
-      // Prevent browser extension errors from crashing the app
-      if (event.message.includes('chrome-extension') ||
-          event.filename?.includes('chrome-extension') ||
-          event.error?.stack?.includes('chrome-extension')) {
+      if (
+        event.message?.includes('chrome-extension') ||
+        event.filename?.includes('chrome-extension') ||
+        event.error?.stack?.includes('chrome-extension')
+      ) {
         event.preventDefault();
         console.warn('Browser extension error suppressed:', event.message);
       }
@@ -50,37 +27,30 @@ export default function RootLayout() {
   }, []);
 
   if (!loaded) {
-    // Async font loading only occurs in development.
     return null;
   }
 
-  // Show splash screen
-  if (showSplash) {
-    return <SplashScreen />;
-  }
-
-  // Show onboarding screens
-  if (showOnboarding) {
-    return <OnboardingScreen onComplete={() => {
-      setShowOnboarding(false);
-      // Ensure we navigate to login after onboarding
-      setTimeout(() => {
-        router.replace('/login');
-      }, 100);
-    }} />;
-  }
-
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack initialRouteName="login">
-        <Stack.Screen name="login" options={{ headerShown: false }} />
-        <Stack.Screen name="profile-setup" options={{ headerShown: false }} />
-        <Stack.Screen name="custom-goal" options={{ headerShown: false }} />
-        <Stack.Screen name="terms" options={{ headerShown: false }} />
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="+not-found" />
+    <>
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor: '#FFFFFF' },
+          animation: 'simple_push',
+        }}
+      >
+        <Stack.Screen name="index" />
+        <Stack.Screen name="welcome" />
+        <Stack.Screen name="signup" />
+        <Stack.Screen name="login" />
+        <Stack.Screen name="verification" />
+        <Stack.Screen name="profile-setup" />
+        <Stack.Screen name="custom-goal" />
+        <Stack.Screen name="terms" />
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="+not-found" options={{ headerShown: true, title: 'Not Found' }} />
       </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
+      <StatusBar style="dark" />
+    </>
   );
 }

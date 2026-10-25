@@ -6,5 +6,5 @@ export default function Index() {
   if (token) {
     return <Redirect href="/(tabs)" />;
   }
-  return <Redirect href="/login" />;
+  return <Redirect href="/welcome" />;
 }

@@ -92,15 +92,10 @@ export function VerificationScreen() {
 
     setLoading(true);
     try {
-      await authService.verify(email, code);
+      await authService.verifySignupOtp(email, code);
 
-      // Check if user already completed profile
-      const existingProfile = await profileService.getProfile();
-      if (existingProfile && existingProfile.name && existingProfile.name !== 'Friend') {
-        router.replace('/(tabs)');
-      } else {
-        router.replace('/profile-setup');
-      }
+      // Session stored on device -> Straight to the app!
+      router.replace('/(tabs)');
     } catch (error: any) {
       console.error('Verification error:', error);
       Alert.alert(
@@ -312,7 +307,7 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     backgroundColor: '#F8FAFC',
-    color: '#FF7E45',
+    color: '#0F172A',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
@@ -320,39 +315,38 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   codeInputFilled: {
-    borderColor: '#FF7E45',
-    backgroundColor: '#FFF5F0',
+    borderColor: '#A3E635',
+    backgroundColor: '#F7FEE7',
   },
   verifyButton: {
-    backgroundColor: '#FF7E45',
+    backgroundColor: '#A3E635',
     paddingVertical: 16,
     paddingHorizontal: 24,
-    borderRadius: 50,
+    borderRadius: 16,
     width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,
     height: 56,
-    shadowColor: '#FF7E45',
+    shadowColor: '#A3E635',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 8,
-    elevation: 3,
+    elevation: 2,
   },
   disabledButton: {
-    backgroundColor: '#FFB599',
-    shadowOpacity: 0,
+    opacity: 0.6,
   },
   verifyButtonText: {
-    color: 'white',
+    color: '#0F172A',
     fontSize: 17,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
   resendButton: {
     padding: 12,
   },
   resendButtonText: {
-    color: '#FF7E45',
+    color: '#4D7C0F',
     fontSize: 15,
     fontWeight: '600',
   },

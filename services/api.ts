@@ -10,6 +10,140 @@ export function getBaseUrl() {
 
 export const authService = {
   /**
+   * Create account with email & password.
+   * Supabase dispatches OTP verification email.
+   */
+  async signUpWithPassword(email: string, password: string) {
+    try {
+      const normalizedEmail = email.trim().toLowerCase();
+      const { data, error } = await supabase.auth.signUp({
+        email: normalizedEmail,
+        password: password,
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      // If Supabase has email confirmation disabled, it returns session immediately
+      if (data?.session?.access_token) {
+        Storage.set('authToken', data.session.access_token);
+        return {
+          success: true,
+          needsOtp: false,
+          user: data.user,
+          session: data.session,
+        };
+      }
+
+      return {
+        success: true,
+        needsOtp: true,
+        user: data.user,
+        message: 'A verification code has been sent to your email.',
+      };
+    } catch (error: any) {
+      console.warn('Supabase signUp error:', error.message || error);
+      throw error;
+    }
+  },
+
+  /**
+   * Direct login with email & password (No OTP required).
+   */
+  async loginWithPassword(email: string, password: string) {
+    try {
+      const normalizedEmail = email.trim().toLowerCase();
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: normalizedEmail,
+        password: password,
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      if (data?.session?.access_token) {
+        Storage.set('authToken', data.session.access_token);
+      }
+
+      return {
+        success: true,
+        user: data.user,
+        session: data.session,
+      };
+    } catch (error: any) {
+      console.warn('Supabase login error:', error.message || error);
+      throw error;
+    }
+  },
+
+  /**
+   * Verify signup OTP token from email
+   */
+  async verifySignupOtp(email: string, code: string) {
+    try {
+      const normalizedEmail = email.trim().toLowerCase();
+      const cleanToken = code.trim();
+
+      // Try signup type first, fallback to email type
+      let { data, error } = await supabase.auth.verifyOtp({
+        email: normalizedEmail,
+        token: cleanToken,
+        type: 'signup',
+      });
+
+      if (error) {
+        const emailVerify = await supabase.auth.verifyOtp({
+          email: normalizedEmail,
+          token: cleanToken,
+          type: 'email',
+        });
+        if (emailVerify.error) {
+          throw error;
+        }
+        data = emailVerify.data;
+      }
+
+      if (data?.session?.access_token) {
+        Storage.set('authToken', data.session.access_token);
+      }
+
+      if (data?.user) {
+        try {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', data.user.id)
+            .maybeSingle();
+
+          if (profile) {
+            Storage.set('cachedProfile', {
+              ...profile,
+              fitnessGoals: profile.fitness_goals,
+              customGoal: profile.custom_goal,
+              fitnessLevel: profile.fitness_level,
+              workoutFrequency: profile.workout_frequency,
+            });
+          }
+        } catch (profileErr) {
+          console.warn('Could not load initial profile on verify:', profileErr);
+        }
+      }
+
+      return {
+        success: true,
+        user: data.user,
+        session: data.session,
+        token: data.session?.access_token,
+      };
+    } catch (error: any) {
+      console.warn('Supabase verifyOtp error:', error.message || error);
+      throw error;
+    }
+  },
+
+  /**
    * Request OTP code via Supabase Email Auth
    */
   async register(email: string) {
