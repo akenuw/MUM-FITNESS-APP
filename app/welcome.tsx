@@ -1,56 +1,111 @@
 import { router } from 'expo-router';
 import React from 'react';
 import {
+  Dimensions,
+  Image,
+  Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Colors } from '@/constants/Colors';
 
-const PRIMARY_ORANGE = Colors.light.primary || '#FF7E45';
+import {
+  BiometricHotspot,
+  BrainDiagnosticCard,
+  TactilePressable,
+} from '@/components/AuthComponents';
+import Storage from '@/utils/storage';
+
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+
+const COLOR_PRIMARY_ORANGE = '#FF6B2C';
+const COLOR_TITLE = '#141518';
+const COLOR_SUBTITLE = '#7C808B';
 
 export default function WelcomeScreen() {
   const insets = useSafeAreaInsets();
+
+  const handleContinueAsGuest = () => {
+    Storage.set('authToken', 'guest_session_' + Date.now());
+    router.replace('/(tabs)');
+  };
 
   return (
     <View
       style={[
         styles.container,
         {
-          paddingTop: Math.max(insets.top, 24),
-          paddingBottom: Math.max(insets.bottom, 24),
+          paddingTop: Math.max(insets.top, 16),
+          paddingBottom: Math.max(insets.bottom, 12),
         },
       ]}
     >
-      {/* Top Header */}
-      <View style={styles.header}>
+      {/* 1. Top Header Block */}
+      <Animated.View entering={FadeInDown.duration(400)} style={styles.header}>
         <Text style={styles.title}>Welcome</Text>
         <Text style={styles.subtitle}>Login or signup to continue</Text>
+      </Animated.View>
+
+      {/* 2. Center Anatomy Hero & Floating Diagnostic Card */}
+      <View style={styles.heroStage}>
+        {/* Anatomical Muscular Human Body Image */}
+        <Image
+          source={require('@/assets/images/image1.png')}
+          style={styles.anatomyImage}
+          resizeMode="contain"
+        />
+
+        {/* 3 Glowing Biometric Hotspots with Breathing Pulse */}
+        {/* Hotspot 1: Forehead / Brain Cortex */}
+        <BiometricHotspot top="18%" left="37%" />
+
+        {/* Hotspot 2: Left Chest / Heart */}
+        <BiometricHotspot top="33%" left="42%" />
+
+        {/* Hotspot 3: Lower Abdomen / Liver */}
+        <BiometricHotspot top="49%" left="44%" />
+
+        {/* Floating "Brain MRI" Diagnostic Card */}
+        <BrainDiagnosticCard />
       </View>
 
-      {/* Visual breathing space reserved for future illustration */}
-      <View style={styles.imageSpacer} />
+      {/* 3. Bottom Action Sheet Container */}
+      <Animated.View
+        entering={FadeInDown.duration(450).delay(100)}
+        style={styles.bottomCardWrapper}
+      >
+        <View style={styles.bottomActionCard}>
+          {/* Primary CTA: "Create account" (Vibrant Product Orange) */}
+          <TactilePressable
+            style={styles.primaryButton}
+            onPress={() => router.push('/signup')}
+          >
+            <Text style={styles.primaryButtonText}>Create account</Text>
+          </TactilePressable>
 
-      {/* Bottom Action Buttons */}
-      <View style={styles.actionSection}>
-        <TouchableOpacity
-          style={styles.primaryButton}
-          activeOpacity={0.88}
-          onPress={() => router.push('/signup')}
-        >
-          <Text style={styles.primaryButtonText}>Create account</Text>
-        </TouchableOpacity>
+          {/* Secondary Button: "Already have an account" */}
+          <TactilePressable
+            style={styles.secondaryButton}
+            onPress={() => router.push('/login')}
+          >
+            <Text style={styles.secondaryButtonText}>Already have an account</Text>
+          </TactilePressable>
+        </View>
 
+        {/* Guest Mode Footer Link */}
         <TouchableOpacity
-          style={styles.secondaryButton}
-          activeOpacity={0.88}
-          onPress={() => router.push('/login')}
+          style={styles.guestLinkRow}
+          activeOpacity={0.7}
+          onPress={handleContinueAsGuest}
         >
-          <Text style={styles.secondaryButtonText}>Already have an account</Text>
+          <Text style={styles.guestTextRegular}>
+            Continue as a <Text style={styles.guestTextBold}>guest?</Text>
+          </Text>
         </TouchableOpacity>
-      </View>
+      </Animated.View>
     </View>
   );
 }
@@ -59,64 +114,113 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#FFFFFF',
-    paddingHorizontal: 24,
     justifyContent: 'space-between',
   },
   header: {
-    marginTop: 12,
+    paddingHorizontal: 24,
+    marginTop: 8,
   },
   title: {
-    fontSize: 32,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontSize: 29,
+    fontWeight: '700',
+    color: COLOR_TITLE,
     letterSpacing: -0.5,
-    marginBottom: 6,
-    textAlign: 'left',
   },
   subtitle: {
-    fontSize: 15,
-    color: '#64748B',
+    fontSize: 14,
+    color: COLOR_SUBTITLE,
     fontWeight: '400',
-    textAlign: 'left',
+    marginTop: 4,
   },
-  imageSpacer: {
+  heroStage: {
     flex: 1,
-    minHeight: 180,
-  },
-  actionSection: {
-    width: '100%',
-    gap: 14,
-    marginBottom: 6,
-  },
-  primaryButton: {
-    backgroundColor: PRIMARY_ORANGE, // Established orange brand color
-    height: 56,
-    borderRadius: 28, // Rounded pill shape matching reference
+    position: 'relative',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: PRIMARY_ORANGE,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.28,
-    shadowRadius: 10,
-    elevation: 3,
+    width: '100%',
+    overflow: 'hidden',
+  },
+  anatomyImage: {
+    width: SCREEN_WIDTH * 0.84,
+    height: SCREEN_HEIGHT * 0.52,
+    alignSelf: 'center',
+    marginBottom: -10,
+  },
+  bottomCardWrapper: {
+    width: '100%',
+    paddingHorizontal: 16,
+    paddingBottom: 4,
+  },
+  bottomActionCard: {
+    backgroundColor: '#FFF9F5',
+    borderWidth: 1,
+    borderColor: '#FDE3D5',
+    borderRadius: 28,
+    paddingHorizontal: 16,
+    paddingVertical: 18,
+    gap: 12,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#FF6B2C',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.08,
+        shadowRadius: 14,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
+  },
+  primaryButton: {
+    backgroundColor: COLOR_PRIMARY_ORANGE,
+    height: 54,
+    borderRadius: 27,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Platform.select({
+      ios: {
+        shadowColor: COLOR_PRIMARY_ORANGE,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.28,
+        shadowRadius: 10,
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
   },
   primaryButtonText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#FFFFFF', // High-contrast crisp white text
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
   secondaryButton: {
     backgroundColor: '#FFFFFF',
-    height: 56,
-    borderRadius: 28,
-    borderWidth: 1.5,
-    borderColor: '#E2E8F0',
+    height: 54,
+    borderRadius: 27,
+    borderWidth: 1.2,
+    borderColor: '#E4E6EB',
     alignItems: 'center',
     justifyContent: 'center',
   },
   secondaryButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#0F172A',
+    fontSize: 15,
+    fontWeight: '500',
+    color: COLOR_TITLE,
+  },
+  guestLinkRow: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+  },
+  guestTextRegular: {
+    fontSize: 13,
+    color: COLOR_SUBTITLE,
+    fontWeight: '400',
+  },
+  guestTextBold: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLOR_TITLE,
   },
 });
