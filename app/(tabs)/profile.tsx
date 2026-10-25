@@ -3,41 +3,72 @@ import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   Alert,
+  Dimensions,
   Image,
   Modal,
+  Platform,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Switch,
   Text,
   TextInput,
   TouchableOpacity,
-  View
+  View,
 } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 
-import { authService, profileService } from '@/services/api';
+import { TactilePressable } from '@/components/AuthComponents';
 import { ProfileSkeleton } from '@/components/SkeletonLoader';
+import { authService, profileService } from '@/services/api';
 import Storage from '@/utils/storage';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+const COLOR_BG = '#F6F5F0';
+const COLOR_CARD = '#FFFFFF';
+const COLOR_TEXT_PRIMARY = '#16181A';
+const COLOR_TEXT_SECONDARY = '#5A5E66';
+const COLOR_TEXT_MUTED = '#8C9098';
+const COLOR_DIVIDER = '#E4E2DC';
+const COLOR_ICON = '#22252A';
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(true);
-  const [name, setName] = useState('Friend');
-  const [email, setEmail] = useState('user@example.com');
-  const [fitnessGoal, setFitnessGoal] = useState('Gentle Mobility & Energy');
-  const [workoutFrequency, setWorkoutFrequency] = useState('3-4');
-  const [workoutsCompleted, setWorkoutsCompleted] = useState(4);
-  const [totalMinutes, setTotalMinutes] = useState(65);
 
-  // Preference Toggles
+  // User Identity & Stats State
+  const [name, setName] = useState('Darlene Robertson');
+  const [email, setEmail] = useState('darlene.robertson@example.com');
+  const [fitnessLevel, setFitnessLevel] = useState('Intermediate');
+  const [primaryGoal, setPrimaryGoal] = useState('Muscle Building');
+  const [planTitle, setPlanTitle] = useState('Muscle Builder');
+  const [targetWeight, setTargetWeight] = useState('82');
+  const [currentWeight, setCurrentWeight] = useState('78');
+  const [height, setHeight] = useState('175');
+  const [age, setAge] = useState('28');
+
+  // 3-Column Stats
+  const [workoutsCount, setWorkoutsCount] = useState(28);
+  const [achievementsCount, setAchievementsCount] = useState(12);
+  const [dayStreak, setDayStreak] = useState(7);
+
+  // App Preference Toggles
   const [dailyReminder, setDailyReminder] = useState(true);
   const [hydrationReminder, setHydrationReminder] = useState(true);
 
-  // Edit Modal State
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [editName, setEditName] = useState('');
-  const [editGoal, setEditGoal] = useState('');
+  // Modals
+  const [isGoalsModalOpen, setIsGoalsModalOpen] = useState(false);
+  const [isNotificationsModalOpen, setIsNotificationsModalOpen] = useState(false);
+  const [isBodyDataModalOpen, setIsBodyDataModalOpen] = useState(false);
+
+  // Form edit states
+  const [tempTargetWeight, setTempTargetWeight] = useState('82');
+  const [tempGoal, setTempGoal] = useState('Muscle Building');
+  const [tempWeight, setTempWeight] = useState('78');
+  const [tempHeight, setTempHeight] = useState('175');
 
   useEffect(() => {
     loadUserData();
@@ -52,78 +83,114 @@ export default function ProfileScreen() {
 
       const profile = await profileService.getProfile();
       if (profile) {
-        if (profile.name) setName(profile.name);
+        if (profile.name && profile.name !== 'Friend') {
+          setName(profile.name);
+        }
+        if (profile.fitnessLevel) {
+          const capLevel = profile.fitnessLevel.charAt(0).toUpperCase() + profile.fitnessLevel.slice(1);
+          setFitnessLevel(capLevel);
+        }
         if (profile.fitnessGoals && profile.fitnessGoals.length > 0) {
-          setFitnessGoal(profile.fitnessGoals[0].replace('_', ' ').toUpperCase());
+          const formattedGoal = profile.fitnessGoals[0]
+            .replace(/_/g, ' ')
+            .replace(/\b\w/g, (c: string) => c.toUpperCase());
+          setPrimaryGoal(formattedGoal);
+          setPlanTitle(formattedGoal);
         } else if (profile.customGoal) {
-          setFitnessGoal(profile.customGoal);
+          setPrimaryGoal(profile.customGoal);
+          setPlanTitle(profile.customGoal);
         }
-        if (profile.workoutFrequency) {
-          setWorkoutFrequency(profile.workoutFrequency);
+
+        if (profile.weight) {
+          setCurrentWeight(String(profile.weight));
         }
+        if ((profile as any).targetWeight) {
+          setTargetWeight(String((profile as any).targetWeight));
+        } else if ((profile as any).goals?.targetWeight) {
+          setTargetWeight(String((profile as any).goals.targetWeight));
+        }
+        if (profile.height) {
+          setHeight(String(profile.height));
+        }
+        if (profile.age) {
+          setAge(String(profile.age));
+        }
+
         if (profile.stats) {
-          if (profile.stats.workoutsCompleted) setWorkoutsCompleted(profile.stats.workoutsCompleted);
-          if (profile.stats.totalMinutes) setTotalMinutes(profile.stats.totalMinutes);
+          if (profile.stats.workoutsCompleted) setWorkoutsCount(profile.stats.workoutsCompleted);
+          if (profile.stats.dayStreak) setDayStreak(profile.stats.dayStreak);
+        }
+        if (profile.achievements && Array.isArray(profile.achievements)) {
+          setAchievementsCount(Math.max(12, profile.achievements.length));
         }
       }
     } catch (e) {
-      console.log('Error loading profile:', e);
+      console.log('Error loading profile data:', e);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleOpenEdit = () => {
-    setEditName(name);
-    setEditGoal(fitnessGoal);
-    setIsEditModalOpen(true);
-  };
-
-  const handleSaveProfile = async () => {
-    if (!editName.trim()) {
-      Alert.alert('Required', 'Please enter your name.');
-      return;
-    }
+  const handleSaveGoals = async () => {
+    setTargetWeight(tempTargetWeight.trim() || '82');
+    setPrimaryGoal(tempGoal.trim() || 'Muscle Building');
+    setPlanTitle(tempGoal.trim() || 'Muscle Builder');
+    setIsGoalsModalOpen(false);
 
     try {
-      setName(editName.trim());
-      setFitnessGoal(editGoal.trim() || 'Gentle Mobility & Energy');
+      const cached = Storage.get('cachedProfile', {}) || {};
+      const updated = {
+        ...cached,
+        targetWeight: parseFloat(tempTargetWeight) || 82,
+        customGoal: tempGoal.trim(),
+      };
+      await profileService.createProfile(updated);
+      Alert.alert('Saved', 'Your fitness goals have been updated.');
+    } catch (err) {
+      console.warn('Error saving goals:', err);
+    }
+  };
 
-      await profileService.createProfile({
-        name: editName.trim(),
-        customGoal: editGoal.trim() || 'Gentle Mobility & Energy',
-        workoutFrequency: workoutFrequency
-      });
+  const handleSaveBodyData = async () => {
+    setCurrentWeight(tempWeight.trim() || '78');
+    setHeight(tempHeight.trim() || '175');
+    setIsBodyDataModalOpen(false);
 
-      setIsEditModalOpen(false);
-      Alert.alert('Saved', 'Your profile details have been updated.');
-    } catch (e) {
-      console.log('Error saving profile:', e);
-      setIsEditModalOpen(false);
+    try {
+      const cached = Storage.get('cachedProfile', {}) || {};
+      const updated = {
+        ...cached,
+        weight: parseFloat(tempWeight) || 78,
+        height: parseFloat(tempHeight) || 175,
+      };
+      await profileService.createProfile(updated);
+      Alert.alert('Saved', 'Your health and body metrics have been updated.');
+    } catch (err) {
+      console.warn('Error saving body metrics:', err);
     }
   };
 
   const handleLogout = () => {
     Alert.alert(
       'Log Out',
-      'Are you sure you want to log out of FitTrack?',
+      'Are you sure you want to log out of your account?',
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Log Out',
           style: 'destructive',
-          onPress: () => {
-            authService.logout();
+          onPress: async () => {
+            await authService.logout();
             router.replace('/welcome');
-          }
-        }
+          },
+        },
       ]
     );
   };
 
   if (loading) {
     return (
-      <View style={[styles.container, { paddingTop: Math.max(insets.top, 16) }]}>
+      <View style={[styles.screen, { paddingTop: Math.max(insets.top, 16) }]}>
         <ScrollView showsVerticalScrollIndicator={false}>
           <ProfileSkeleton />
         </ScrollView>
@@ -132,214 +199,325 @@ export default function ProfileScreen() {
   }
 
   return (
-    <View style={[styles.container, { paddingTop: Math.max(insets.top, 16) }]}>
-      {/* Screen Header */}
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.screenSubtitle}>ACCOUNT & SETTINGS</Text>
-          <Text style={styles.screenTitle}>Your Profile</Text>
-        </View>
+    <View style={styles.screen}>
+      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-        <TouchableOpacity style={styles.editBtn} activeOpacity={0.8} onPress={handleOpenEdit}>
-          <Ionicons name="pencil" size={16} color="#FF6A3D" />
-          <Text style={styles.editBtnText}>Edit</Text>
-        </TouchableOpacity>
-      </View>
-
+      {/* Main Scroll Content with 110px bottom clearance for the floating nav bar */}
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 95 }]}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: Math.max(insets.bottom, 16) + 110 },
+        ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Profile Card */}
-        <Animated.View entering={FadeInDown.duration(350).delay(100)}>
-          <View style={styles.profileCard}>
-            <View style={styles.profileAvatarContainer}>
-              <Image source={require('@/assets/images/image1.png')} style={styles.profileAvatar} />
-              <View style={styles.verifiedBadge}>
-                <Ionicons name="checkmark" size={12} color="#FFFFFF" />
-              </View>
+        {/* 1. Full-Bleed Atmospheric Gym Hero Banner with Multi-Stop Bottom Fade */}
+        <View style={styles.heroContainer}>
+          <Image
+            source={require('@/assets/images/gym-hero.jpg')}
+            style={styles.heroImage}
+            resizeMode="cover"
+          />
+
+          {/* Seamless Multi-Stop Fade Gradient into Screen Background (#F6F5F0) */}
+          <Svg height="220" width={SCREEN_WIDTH} style={StyleSheet.absoluteFill}>
+            <Defs>
+              <LinearGradient id="heroBottomFade" x1="0" y1="0" x2="0" y2="1">
+                <Stop offset="0%" stopColor="#F6F5F0" stopOpacity="0.0" />
+                <Stop offset="40%" stopColor="#F6F5F0" stopOpacity="0.0" />
+                <Stop offset="68%" stopColor="#F6F5F0" stopOpacity="0.65" />
+                <Stop offset="100%" stopColor="#F6F5F0" stopOpacity="1.0" />
+              </LinearGradient>
+            </Defs>
+            <Rect x="0" y="0" width={SCREEN_WIDTH} height="220" fill="url(#heroBottomFade)" />
+          </Svg>
+
+          {/* Floating Top Navigation Row (Over Hero Banner) */}
+          <View style={[styles.topNavRow, { top: Math.max(insets.top, 14) + 6 }]}>
+            <View style={styles.topNavLeft}>
+              <TouchableOpacity
+                style={styles.frostedBackButton}
+                activeOpacity={0.8}
+                onPress={() => router.back()}
+              >
+                <Ionicons name="arrow-back" size={17} color="#FFFFFF" />
+              </TouchableOpacity>
+              <Text style={styles.screenTitle}>Profile</Text>
             </View>
 
-            <View style={styles.profileDetails}>
-              <Text style={styles.profileName}>{name}</Text>
-              <Text style={styles.profileEmail}>{email}</Text>
-              <View style={styles.memberTag}>
-                <Ionicons name="shield-checkmark-outline" size={13} color="#2E7D32" />
-                <Text style={styles.memberTagText}>FitTrack Active Member</Text>
-              </View>
-            </View>
-          </View>
-        </Animated.View>
-
-        {/* Lifetime Activity Stats */}
-        <Animated.View entering={FadeInDown.duration(350).delay(180)} style={styles.sectionContainer}>
-          <View style={styles.statsCard}>
-            <View style={styles.statCol}>
-              <Text style={styles.statNumber}>{workoutsCompleted}</Text>
-              <Text style={styles.statLabel}>Sessions</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statCol}>
-              <Text style={styles.statNumber}>{totalMinutes}</Text>
-              <Text style={styles.statLabel}>Movement Mins</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statCol}>
-              <Text style={styles.statNumber}>3</Text>
-              <Text style={styles.statLabel}>Day Streak</Text>
-            </View>
-          </View>
-        </Animated.View>
-
-        {/* Wellness & Fitness Focus */}
-        <Animated.View entering={FadeInDown.duration(350).delay(260)} style={styles.sectionContainer}>
-          <View style={styles.focusCard}>
-            <View style={styles.focusHeaderRow}>
-              <View style={styles.focusIconWrap}>
-                <MaterialCommunityIcons name="heart-cog-outline" size={22} color="#FF6A3D" />
-              </View>
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={styles.focusTitle}>Health & Fitness Focus</Text>
-                <Text style={styles.focusSubtitle}>Personalized gentle routine goals</Text>
-              </View>
-            </View>
-
-            <View style={styles.focusDetailRow}>
-              <View style={styles.focusItem}>
-                <Text style={styles.focusItemLabel}>Primary Goal</Text>
-                <Text style={styles.focusItemValue}>{fitnessGoal}</Text>
-              </View>
-              <View style={styles.focusItem}>
-                <Text style={styles.focusItemLabel}>Target Frequency</Text>
-                <Text style={styles.focusItemValue}>{workoutFrequency} sessions / week</Text>
-              </View>
-            </View>
-          </View>
-        </Animated.View>
-
-        {/* App Preferences & Notifications */}
-        <Animated.View entering={FadeInDown.duration(350).delay(340)} style={styles.sectionContainer}>
-          <Text style={styles.sectionTitle}>App Preferences</Text>
-          <View style={styles.settingsGroup}>
-            <View style={styles.settingItem}>
-              <View style={[styles.settingIconWrap, { backgroundColor: '#FFF4EE' }]}>
-                <Ionicons name="notifications-outline" size={18} color="#FF6A3D" />
-              </View>
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={styles.settingLabel}>Daily Movement Reminder</Text>
-                <Text style={styles.settingSubtext}>Gentle notification around 9:00 AM</Text>
-              </View>
-              <Switch
-                value={dailyReminder}
-                onValueChange={setDailyReminder}
-                trackColor={{ false: '#E2E8F0', true: '#FF6A3D' }}
-                thumbColor="#FFFFFF"
-              />
-            </View>
-
-            <View style={styles.settingDivider} />
-
-            <View style={styles.settingItem}>
-              <View style={[styles.settingIconWrap, { backgroundColor: '#E0F2FE' }]}>
-                <MaterialCommunityIcons name="water-outline" size={18} color="#0284C7" />
-              </View>
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={styles.settingLabel}>Hydration Prompts</Text>
-                <Text style={styles.settingSubtext}>Gentle reminders to sip water regularly</Text>
-              </View>
-              <Switch
-                value={hydrationReminder}
-                onValueChange={setHydrationReminder}
-                trackColor={{ false: '#E2E8F0', true: '#0284C7' }}
-                thumbColor="#FFFFFF"
-              />
-            </View>
-          </View>
-        </Animated.View>
-
-        {/* Support & Legal */}
-        <Animated.View entering={FadeInDown.duration(350).delay(420)} style={styles.sectionContainer}>
-          <Text style={styles.sectionTitle}>Support & Information</Text>
-          <View style={styles.settingsGroup}>
+            {/* Right Action Button with Coral-Red Indicator Dot */}
             <TouchableOpacity
-              style={styles.settingLinkItem}
-              activeOpacity={0.7}
-              onPress={() => router.push('/terms')}
+              style={styles.frostedRightButton}
+              activeOpacity={0.8}
+              onPress={() => setIsNotificationsModalOpen(true)}
             >
-              <View style={[styles.settingIconWrap, { backgroundColor: '#F1F5F9' }]}>
-                <Ionicons name="document-text-outline" size={18} color="#475569" />
-              </View>
-              <Text style={styles.settingLinkLabel}>Terms of Use & Privacy</Text>
-              <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
-            </TouchableOpacity>
-
-            <View style={styles.settingDivider} />
-
-            <TouchableOpacity
-              style={styles.settingLinkItem}
-              activeOpacity={0.7}
-              onPress={() => Alert.alert('Support & Help', 'For any inquiries or feedback, contact: support@fittrack.app')}
-            >
-              <View style={[styles.settingIconWrap, { backgroundColor: '#F1F5F9' }]}>
-                <Ionicons name="help-circle-outline" size={18} color="#475569" />
-              </View>
-              <Text style={styles.settingLinkLabel}>Help & Support</Text>
-              <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+              <View style={styles.rightIndicatorDot} />
             </TouchableOpacity>
           </View>
+        </View>
+
+        {/* 2. Overlapping Centered Avatar & Identity Block */}
+        <View style={styles.identityContainer}>
+          <View style={styles.avatarWrapper}>
+            <Image
+              source={require('@/assets/images/avatar-default.jpg')}
+              style={styles.avatarImage}
+            />
+          </View>
+
+          <Text style={styles.userName}>{name}</Text>
+          <Text style={styles.userSubtitle}>
+            {fitnessLevel} • {primaryGoal}
+          </Text>
+        </View>
+
+        {/* 3. 3-Column Stats Bar */}
+        <Animated.View entering={FadeInDown.duration(400).delay(60)} style={styles.statsBar}>
+          {/* Workouts */}
+          <View style={styles.statItem}>
+            <Text style={styles.statValue}>{workoutsCount}</Text>
+            <Text style={styles.statLabel}>Workouts</Text>
+          </View>
+
+          <View style={styles.statDivider} />
+
+          {/* Achievements */}
+          <View style={styles.statItem}>
+            <Text style={styles.statValue}>{achievementsCount}</Text>
+            <Text style={styles.statLabel}>Achievements</Text>
+          </View>
+
+          <View style={styles.statDivider} />
+
+          {/* Day Streak */}
+          <View style={styles.statItem}>
+            <Text style={styles.statValue}>{dayStreak}</Text>
+            <Text style={styles.statLabel}>Day Streak</Text>
+          </View>
         </Animated.View>
 
-        {/* Logout Button */}
-        <Animated.View entering={FadeInDown.duration(350).delay(480)}>
-          <TouchableOpacity style={styles.logoutButton} activeOpacity={0.8} onPress={handleLogout}>
-            <Ionicons name="log-out-outline" size={18} color="#EF4444" style={{ marginRight: 6 }} />
-            <Text style={styles.logoutButtonText}>Log Out</Text>
-          </TouchableOpacity>
+        {/* 4. "My Fitness" Section Header */}
+        <Animated.View entering={FadeInDown.duration(400).delay(120)}>
+          <Text style={styles.sectionHeaderTitle}>My Fitness</Text>
+        </Animated.View>
+
+        {/* 5. Standardized Menu Cards */}
+        <Animated.View entering={FadeInDown.duration(400).delay(180)}>
+          {/* Card 1: My Plan */}
+          <TactilePressable
+            style={styles.menuCard}
+            onPress={() => router.push('/(tabs)/workouts')}
+          >
+            <View style={styles.cardLeftIcon}>
+              <Ionicons name="clipboard-outline" size={22} color={COLOR_ICON} />
+            </View>
+            <View style={styles.cardCenterCol}>
+              <Text style={styles.cardTitle}>My Plan</Text>
+              <Text style={styles.cardSubtitle}>{planTitle}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={17} color={COLOR_ICON} />
+          </TactilePressable>
+
+          {/* Card 2: Goals */}
+          <TactilePressable
+            style={styles.menuCard}
+            onPress={() => {
+              setTempTargetWeight(targetWeight);
+              setTempGoal(primaryGoal);
+              setIsGoalsModalOpen(true);
+            }}
+          >
+            <View style={styles.cardLeftIcon}>
+              <MaterialCommunityIcons name="target" size={23} color={COLOR_ICON} />
+            </View>
+            <View style={styles.cardCenterCol}>
+              <Text style={styles.cardTitle}>Goals</Text>
+              <Text style={styles.cardSubtitle}>Target Weight: {targetWeight} kg</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={17} color={COLOR_ICON} />
+          </TactilePressable>
+
+          {/* Card 3: Personal Records */}
+          <TactilePressable
+            style={styles.menuCard}
+            onPress={() => {
+              Alert.alert(
+                'Personal Records',
+                'Strength Focus:\n• Bench Press: 95 kg\n• Squat: 120 kg\n• Deadlift: 140 kg'
+              );
+            }}
+          >
+            <View style={styles.cardLeftIcon}>
+              <Ionicons name="trophy-outline" size={22} color={COLOR_ICON} />
+            </View>
+            <View style={styles.cardCenterCol}>
+              <Text style={styles.cardTitle}>Personal Records</Text>
+              <Text style={styles.cardSubtitle}>Strength Focus</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={17} color={COLOR_ICON} />
+          </TactilePressable>
+
+          {/* Card 4: Health & Body Data */}
+          <TactilePressable
+            style={styles.menuCard}
+            onPress={() => {
+              setTempWeight(currentWeight);
+              setTempHeight(height);
+              setIsBodyDataModalOpen(true);
+            }}
+          >
+            <View style={styles.cardLeftIcon}>
+              <MaterialCommunityIcons name="heart-pulse" size={22} color={COLOR_ICON} />
+            </View>
+            <View style={styles.cardCenterCol}>
+              <Text style={styles.cardTitle}>Health & Body Data</Text>
+              <Text style={styles.cardSubtitle}>Strength Focus</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={17} color={COLOR_ICON} />
+          </TactilePressable>
+
+          {/* Card 5: Notifications */}
+          <TactilePressable
+            style={styles.menuCard}
+            onPress={() => setIsNotificationsModalOpen(true)}
+          >
+            <View style={styles.cardLeftIcon}>
+              <Ionicons name="notifications-outline" size={22} color={COLOR_ICON} />
+            </View>
+            <View style={styles.cardCenterCol}>
+              <Text style={styles.cardTitle}>Notifications</Text>
+              <Text style={styles.cardSubtitle}>
+                {dailyReminder ? 'Daily Reminders Active' : 'Muted'}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={17} color={COLOR_ICON} />
+          </TactilePressable>
+
+          {/* 6. Account Action: Log Out */}
+          <TactilePressable style={styles.logoutCard} onPress={handleLogout}>
+            <Ionicons name="log-out-outline" size={20} color="#EF4444" style={{ marginRight: 8 }} />
+            <Text style={styles.logoutText}>Log Out</Text>
+          </TactilePressable>
 
           <Text style={styles.versionText}>FitTrack v2.1.0 • Supportive Wellness</Text>
         </Animated.View>
       </ScrollView>
 
-      {/* Edit Profile Modal */}
-      <Modal
-        visible={isEditModalOpen}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setIsEditModalOpen(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalSheet, { paddingBottom: Math.max(insets.bottom, 20) }]}>
-            <View style={styles.sheetHeader}>
-              <Text style={styles.sheetTitle}>Edit Profile Details</Text>
-              <TouchableOpacity onPress={() => setIsEditModalOpen(false)}>
-                <Ionicons name="close" size={22} color="#0F172A" />
+      {/* --- MODAL 1: Goals & Target Weight Editor --- */}
+      <Modal visible={isGoalsModalOpen} animationType="slide" transparent>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHeaderRow}>
+              <Text style={styles.modalTitle}>Fitness Goals</Text>
+              <TouchableOpacity onPress={() => setIsGoalsModalOpen(false)}>
+                <Ionicons name="close" size={22} color="#16181A" />
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false}>
-              <Text style={styles.inputLabel}>Your Name</Text>
-              <TextInput
-                style={styles.modalInput}
-                value={editName}
-                onChangeText={setEditName}
-                placeholder="Enter full name"
-                placeholderTextColor="#94A3B8"
-              />
+            <Text style={styles.inputLabel}>Primary Focus / Program</Text>
+            <TextInput
+              style={styles.inputField}
+              value={tempGoal}
+              onChangeText={setTempGoal}
+              placeholder="e.g. Muscle Building"
+              placeholderTextColor="#8C9098"
+            />
 
-              <Text style={[styles.inputLabel, { marginTop: 14 }]}>Primary Focus / Goal</Text>
-              <TextInput
-                style={styles.modalInput}
-                value={editGoal}
-                onChangeText={setEditGoal}
-                placeholder="e.g. Gentle Recovery & Bone Health"
-                placeholderTextColor="#94A3B8"
-              />
+            <Text style={styles.inputLabel}>Target Weight (kg)</Text>
+            <TextInput
+              style={styles.inputField}
+              value={tempTargetWeight}
+              onChangeText={setTempTargetWeight}
+              keyboardType="numeric"
+              placeholder="e.g. 82"
+              placeholderTextColor="#8C9098"
+            />
 
-              <TouchableOpacity style={styles.saveModalBtn} activeOpacity={0.85} onPress={handleSaveProfile}>
-                <Text style={styles.saveModalBtnText}>Save Changes</Text>
+            <TouchableOpacity style={styles.saveBtn} activeOpacity={0.85} onPress={handleSaveGoals}>
+              <Text style={styles.saveBtnText}>Save Goals</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* --- MODAL 2: Health & Body Metrics Editor --- */}
+      <Modal visible={isBodyDataModalOpen} animationType="slide" transparent>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHeaderRow}>
+              <Text style={styles.modalTitle}>Health & Body Data</Text>
+              <TouchableOpacity onPress={() => setIsBodyDataModalOpen(false)}>
+                <Ionicons name="close" size={22} color="#16181A" />
               </TouchableOpacity>
-            </ScrollView>
+            </View>
+
+            <Text style={styles.inputLabel}>Current Weight (kg)</Text>
+            <TextInput
+              style={styles.inputField}
+              value={tempWeight}
+              onChangeText={setTempWeight}
+              keyboardType="numeric"
+              placeholder="e.g. 78"
+              placeholderTextColor="#8C9098"
+            />
+
+            <Text style={styles.inputLabel}>Height (cm)</Text>
+            <TextInput
+              style={styles.inputField}
+              value={tempHeight}
+              onChangeText={setTempHeight}
+              keyboardType="numeric"
+              placeholder="e.g. 175"
+              placeholderTextColor="#8C9098"
+            />
+
+            <TouchableOpacity
+              style={styles.saveBtn}
+              activeOpacity={0.85}
+              onPress={handleSaveBodyData}
+            >
+              <Text style={styles.saveBtnText}>Save Metrics</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* --- MODAL 3: Notifications Settings --- */}
+      <Modal visible={isNotificationsModalOpen} animationType="slide" transparent>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHeaderRow}>
+              <Text style={styles.modalTitle}>Notifications</Text>
+              <TouchableOpacity onPress={() => setIsNotificationsModalOpen(false)}>
+                <Ionicons name="close" size={22} color="#16181A" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.toggleRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.toggleTitle}>Daily Movement Reminder</Text>
+                <Text style={styles.toggleSubtitle}>Prompt around 9:00 AM</Text>
+              </View>
+              <Switch
+                value={dailyReminder}
+                onValueChange={setDailyReminder}
+                trackColor={{ false: '#E2E8F0', true: '#FF6B2C' }}
+                thumbColor="#FFFFFF"
+              />
+            </View>
+
+            <View style={styles.toggleRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.toggleTitle}>Hydration Prompts</Text>
+                <Text style={styles.toggleSubtitle}>Reminders to drink water regularly</Text>
+              </View>
+              <Switch
+                value={hydrationReminder}
+                onValueChange={setHydrationReminder}
+                trackColor={{ false: '#E2E8F0', true: '#FF6B2C' }}
+                thumbColor="#FFFFFF"
+              />
+            </View>
           </View>
         </View>
       </Modal>
@@ -348,334 +526,308 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
+  screen: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingBottom: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-    backgroundColor: '#FFFFFF',
-  },
-  screenSubtitle: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#FF6A3D',
-    letterSpacing: 0.8,
-    marginBottom: 2,
-  },
-  screenTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  editBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFF4EE',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 10,
-    gap: 4,
-  },
-  editBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#FF6A3D',
+    backgroundColor: COLOR_BG,
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 18,
-    paddingTop: 18,
+    flexGrow: 1,
   },
-  profileCard: {
+
+  /* Hero Banner */
+  heroContainer: {
+    width: '100%',
+    height: 220,
+    position: 'relative',
+    backgroundColor: '#1E2328',
+  },
+  heroImage: {
+    width: '100%',
+    height: 220,
+  },
+  topNavRow: {
+    position: 'absolute',
+    left: 20,
+    right: 20,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    justifyContent: 'space-between',
+    zIndex: 10,
+  },
+  topNavLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  frostedBackButton: {
+    width: 36,
+    height: 36,
     borderRadius: 18,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
-    marginBottom: 16,
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  profileAvatarContainer: {
-    position: 'relative',
-  },
-  profileAvatar: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    borderWidth: 2,
-    borderColor: '#FFF4EE',
-  },
-  verifiedBadge: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: '#10B981',
+    backgroundColor: 'rgba(255, 255, 255, 0.22)',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
+    marginRight: 12,
   },
-  profileDetails: {
-    marginLeft: 14,
-    flex: 1,
-  },
-  profileName: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#0F172A',
-    marginBottom: 2,
-  },
-  profileEmail: {
-    fontSize: 13,
-    color: '#64748B',
-    marginBottom: 6,
-  },
-  memberTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#ECFDF5',
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    gap: 4,
-  },
-  memberTagText: {
-    fontSize: 11,
+  screenTitle: {
+    fontSize: 17,
     fontWeight: '600',
-    color: '#065F46',
+    color: '#FFFFFF',
+    letterSpacing: -0.2,
   },
-  sectionContainer: {
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#0F172A',
-    marginBottom: 10,
-    marginLeft: 2,
-  },
-  statsCard: {
-    flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    paddingVertical: 16,
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
+  frostedRightButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.85)',
     alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
   },
-  statCol: {
+  rightIndicatorDot: {
+    position: 'absolute',
+    top: 8,
+    right: 9,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#FF4B4B',
+  },
+
+  /* Identity Block */
+  identityContainer: {
+    alignItems: 'center',
+    marginTop: -44,
+    zIndex: 5,
+    paddingHorizontal: 20,
+  },
+  avatarWrapper: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 3,
+    borderColor: COLOR_BG,
+    backgroundColor: '#E5E4DF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.12,
+        shadowRadius: 10,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
+  },
+  avatarImage: {
+    width: 74,
+    height: 74,
+    borderRadius: 37,
+  },
+  userName: {
+    fontSize: 19,
+    fontWeight: '700',
+    color: COLOR_TEXT_PRIMARY,
+    letterSpacing: -0.3,
+    marginTop: 10,
+    textAlign: 'center',
+  },
+  userSubtitle: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: COLOR_TEXT_SECONDARY,
+    marginTop: 4,
+    textAlign: 'center',
+  },
+
+  /* 3-Column Stats Bar */
+  statsBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 20,
+    marginHorizontal: 28,
+    paddingVertical: 6,
+  },
+  statItem: {
     flex: 1,
     alignItems: 'center',
   },
-  statNumber: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#0F172A',
-    marginBottom: 2,
+  statValue: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: COLOR_TEXT_PRIMARY,
   },
   statLabel: {
-    fontSize: 12,
-    color: '#64748B',
-    fontWeight: '500',
+    fontSize: 11.5,
+    fontWeight: '400',
+    color: COLOR_TEXT_MUTED,
+    marginTop: 3,
   },
   statDivider: {
     width: 1,
-    height: 30,
-    backgroundColor: '#F1F5F9',
+    height: 28,
+    backgroundColor: COLOR_DIVIDER,
   },
-  focusCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
-  },
-  focusHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 14,
-  },
-  focusIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#FFF4EE',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  focusTitle: {
-    fontSize: 15,
+
+  /* Section Title */
+  sectionHeaderTitle: {
+    fontSize: 16,
     fontWeight: '700',
-    color: '#0F172A',
+    color: COLOR_TEXT_PRIMARY,
+    marginTop: 26,
+    marginBottom: 12,
+    paddingHorizontal: 20,
   },
-  focusSubtitle: {
-    fontSize: 12,
-    color: '#64748B',
-    marginTop: 1,
-  },
-  focusDetailRow: {
-    flexDirection: 'row',
-    backgroundColor: '#F8FAFC',
-    borderRadius: 12,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    gap: 12,
-  },
-  focusItem: {
-    flex: 1,
-  },
-  focusItemLabel: {
-    fontSize: 11,
-    color: '#64748B',
-    marginBottom: 2,
-  },
-  focusItemValue: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  settingsGroup: {
-    backgroundColor: '#FFFFFF',
+
+  /* Menu Cards */
+  menuCard: {
+    marginHorizontal: 20,
+    marginBottom: 10,
+    backgroundColor: COLOR_CARD,
     borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
-    overflow: 'hidden',
-  },
-  settingItem: {
+    paddingVertical: 14,
+    paddingHorizontal: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 14,
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.03)',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.03,
+        shadowRadius: 10,
+      },
+      android: {
+        elevation: 1.5,
+      },
+    }),
   },
-  settingIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+  cardLeftIcon: {
+    width: 28,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  settingLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#0F172A',
-  },
-  settingSubtext: {
-    fontSize: 12,
-    color: '#64748B',
-    marginTop: 1,
-  },
-  settingDivider: {
-    height: 1,
-    backgroundColor: '#F1F5F9',
-    marginHorizontal: 14,
-  },
-  settingLinkItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 14,
-  },
-  settingLinkLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#0F172A',
+  cardCenterCol: {
     flex: 1,
     marginLeft: 12,
+    marginRight: 8,
   },
-  logoutButton: {
+  cardTitle: {
+    fontSize: 14.5,
+    fontWeight: '600',
+    color: COLOR_TEXT_PRIMARY,
+  },
+  cardSubtitle: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: COLOR_TEXT_MUTED,
+    marginTop: 2,
+  },
+
+  /* Log Out Card */
+  logoutCard: {
+    marginHorizontal: 20,
+    marginTop: 14,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    paddingVertical: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FEF2F2',
     borderWidth: 1,
     borderColor: '#FEE2E2',
-    borderRadius: 14,
-    paddingVertical: 14,
-    marginTop: 8,
-    marginBottom: 12,
   },
-  logoutButtonText: {
-    fontSize: 14,
-    fontWeight: '700',
+  logoutText: {
+    fontSize: 14.5,
+    fontWeight: '600',
     color: '#EF4444',
   },
   versionText: {
-    fontSize: 12,
-    color: '#94A3B8',
+    fontSize: 11,
+    color: COLOR_TEXT_MUTED,
     textAlign: 'center',
-    marginBottom: 12,
+    marginTop: 14,
+    marginBottom: 8,
   },
-  modalOverlay: {
+
+  /* Modal Sheets */
+  modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    backgroundColor: 'rgba(0,0,0,0.45)',
     justifyContent: 'flex-end',
   },
   modalSheet: {
     backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    maxHeight: '80%',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: 24,
+    paddingBottom: 36,
   },
-  sheetHeader: {
+  modalHeaderRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingBottom: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-    marginBottom: 16,
+    justifyContent: 'space-between',
+    marginBottom: 18,
   },
-  sheetTitle: {
+  modalTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#0F172A',
+    color: COLOR_TEXT_PRIMARY,
   },
   inputLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#475569',
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: COLOR_TEXT_PRIMARY,
     marginBottom: 6,
+    marginTop: 8,
   },
-  modalInput: {
-    backgroundColor: '#F8FAFC',
+  inputField: {
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: '#F7F8FA',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 12,
+    borderColor: '#EFEFEF',
     paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 15,
-    color: '#0F172A',
+    fontSize: 14,
+    color: COLOR_TEXT_PRIMARY,
+    marginBottom: 10,
   },
-  saveModalBtn: {
-    backgroundColor: '#FF6A3D',
-    borderRadius: 12,
-    paddingVertical: 14,
+  saveBtn: {
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#FF6B2C',
     alignItems: 'center',
-    marginTop: 20,
+    justifyContent: 'center',
+    marginTop: 16,
   },
-  saveModalBtnText: {
-    color: '#FFFFFF',
+  saveBtnText: {
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F2F5',
+  },
+  toggleTitle: {
+    fontSize: 14.5,
+    fontWeight: '600',
+    color: COLOR_TEXT_PRIMARY,
+  },
+  toggleSubtitle: {
+    fontSize: 12,
+    color: COLOR_TEXT_MUTED,
+    marginTop: 2,
   },
 });
