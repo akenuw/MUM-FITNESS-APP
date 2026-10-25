@@ -1,130 +1,82 @@
-# FitTrack - Fitness Tracking App
+# My Mum Fitness App (FitTrack)
 
-FitTrack is a comprehensive fitness tracking application built with React Native (Expo) for the frontend and Node.js/Express for the backend.
+A modern, supportive wellness and fitness tracking application for mums, built with **React Native (Expo)**, **TypeScript**, and a serverless **Supabase** backend.
 
-## Project Structure
+---
 
-The project is organized as follows:
+## 🏗️ Architecture & Technology Stack
 
-```
-frontend/               # Main project directory
-├── app/                # Frontend app screens using Expo Router
-├── assets/             # Images, fonts, and other static assets
-├── components/         # Reusable React components
-├── services/           # API services and utilities
-├── backend/            # Backend server and API
-│   ├── src/            # Backend source code
-│   │   ├── config/     # Configuration files
-│   │   ├── controllers/# Route controllers
-│   │   ├── middleware/ # Express middleware
-│   │   ├── models/     # Database models
-│   │   ├── routes/     # API routes
-│   │   ├── utils/      # Utility functions
-│   │   └── server.js   # Main server file
-│   ├── .env            # Environment variables
-│   └── package.json    # Backend dependencies
-└── package.json        # Frontend dependencies
+- **Frontend**: React Native, Expo 57, Expo Router, TypeScript, React Native Reanimated
+- **Backend & Auth**: [Supabase](https://supabase.com)
+  - **Auth**: Built-in Email OTP verification (no local SMTP or passwords needed)
+  - **Database**: PostgreSQL with Row Level Security (RLS) policies
+  - **Session Persistence**: Secure token storage via `expo-secure-store` (native) and `localStorage` (web)
+- **State & Storage**: Cross-platform persistent caching layer (`utils/storage.ts`)
+
+---
+
+## 🚀 Quick Start
+
+### 1. Install Dependencies
+
+```bash
+npm install
 ```
 
-## Getting Started
+### 2. Configure Supabase
 
-### Prerequisites
+1. Create a project at [supabase.com](https://supabase.com).
+2. Go to your **SQL Editor** in the Supabase Dashboard, create a **New Query**, paste the contents of [`supabase/setup.sql`](./supabase/setup.sql), and click **Run**.
+   - This creates the `profiles` table, Row Level Security policies, and automated user creation triggers.
+3. Copy your project URL and anon public key from **Project Settings > API**.
+4. Create a `.env` file in the root directory (based on `.env.example`):
 
-- Node.js (v14 or higher)
-- MongoDB (local or Atlas)
-- Gmail account (for email verification)
+```bash
+EXPO_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+EXPO_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
+```
 
-### Installation
+### 3. Run the App
 
-1. Install all dependencies (frontend and backend):
+Start the Expo development server:
 
-   ```bash
-   npm run install:all
-   ```
+```bash
+npm start
+```
 
-2. Configure email settings:
-   - Follow the instructions in `backend/EMAIL_SETUP.md`
-   - Update the `.env` file in the backend directory with your email credentials
+- Press `a` to open in Android Emulator
+- Press `i` to open in iOS Simulator
+- Press `w` to run in Web browser
+- Or scan the QR code with **Expo Go** on your physical phone!
 
-### Running the Application
+---
 
-1. Start the backend server with automatic IP configuration:
+## 🔒 Authentication Flow
 
-   ```bash
-   node start-backend.js
-   ```
+1. **Email OTP**: User enters their email address on the Login screen.
+2. **Dispatch**: Supabase dispatches a 6-digit OTP code directly to their email inbox.
+3. **Verification**: User inputs the 6-digit code on the Verification screen. Supabase verifies the code and issues an authenticated session token.
+4. **Profile Setup**: New users complete their initial wellness goals; existing users are routed straight to the dashboard (`/(tabs)`).
 
-   This script will:
-   - Find your computer's IP address
-   - Update the API URL in services/api.js
-   - Start the backend server
+---
 
-2. Start the frontend (Expo):
+## 📁 Project Structure
 
-   ```bash
-   npx expo start --tunnel
-   ```
-
-3. Scan the QR code with the Expo Go app on your device
-
-4. Real-time Email Verification:
-   - When you log in, a verification code will be sent to your email
-   - Check your inbox for the verification code
-   - Enter the code in the app to complete the login process
-
-## Features
-
-- User authentication with email verification
-- User profile management
-- Fitness goal tracking
-- Workout statistics
-
-## Backend API
-
-The backend provides the following API endpoints:
-
-### Authentication
-- `POST /api/auth/register` - Register a new user
-- `POST /api/auth/login` - Login user (sends verification code)
-- `POST /api/auth/verify` - Verify email with code
-- `GET /api/auth/me` - Get current user (protected)
-
-### Profile
-- `POST /api/profile` - Create or update user profile (protected)
-- `GET /api/profile` - Get current user's profile (protected)
-- `PUT /api/profile/stats` - Update user stats (protected)
-- `PUT /api/profile/goals` - Update user goals (protected)
-
-## Email Verification
-
-The app uses real email verification for user authentication. See `backend/EMAIL_SETUP.md` for setup instructions.
-
-## Troubleshooting
-
-If you encounter issues:
-
-1. **Use the start-backend.js script**
-   - Always use `node start-backend.js` to start the backend server
-   - This will automatically configure the API URL with your IP address
-
-2. **Make sure your device and computer are on the same network**
-   - Your mobile device and computer must be on the same WiFi network
-   - Some public networks block the necessary ports
-
-3. **Use the tunnel option**
-   - If you're still having issues, try: `npx expo start --tunnel`
-   - This creates a secure tunnel that works across networks
-
-4. **Check your email configuration**
-   - Make sure your email credentials in the `.env` file are correct
-   - Check that your email provider allows sending emails from apps
-
-5. **Clear Expo cache**
-   - If you're having persistent issues, try:
-   ```bash
-   npx expo start --clear
-   ```
-
-6. **Restart the backend server**
-   - Sometimes simply restarting the backend server can fix connection issues
-   - Use `node start-backend.js` to restart the server
+```
+├── app/                  # Expo Router file-based screens and tabs
+│   ├── (tabs)/           # Dashboard, Workouts, Progress, Profile, Nutrition
+│   ├── login.tsx         # Login screen
+│   ├── verification.tsx  # 6-digit Email OTP screen
+│   ├── profile-setup.tsx # Multi-step onboarding profile setup
+│   └── _layout.tsx       # Root layout & navigation providers
+├── components/           # Reusable UI components
+├── constants/            # Design system colors and styles
+├── services/             # Supabase client & API services
+│   ├── supabase.ts       # Configured Supabase client with SecureStore adapter
+│   └── api.ts            # authService & profileService with offline caching
+├── supabase/             # Database migrations and setup scripts
+│   ├── setup.sql         # Consolidated SQL setup script for SQL Editor
+│   └── migrations/       # Versioned migration files
+├── utils/                # Storage, network connection, and polyfill utilities
+└── package.json          # Dependencies & scripts
+```

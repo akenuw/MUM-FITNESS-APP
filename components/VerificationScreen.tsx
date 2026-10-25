@@ -1,74 +1,77 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useRef, useState } from 'react';
-import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { authService } from '../services/api';
+import {
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { authService, profileService } from '../services/api';
+
+const CODE_LENGTH = 6;
 
 export function VerificationScreen() {
   const params = useLocalSearchParams();
-  const email = (params.email as string) || '';
-  const initialDevCode = (params.devCode as string) || '';
+  const email = ((params.email as string) || '').trim();
+  const initialDevCode = ((params.devCode as string) || '').trim();
+
   const [devCode, setDevCode] = useState<string>(initialDevCode);
   const [verificationCode, setVerificationCode] = useState<string[]>(
-    initialDevCode ? initialDevCode.slice(0, 4).split('') : ['', '', '', '']
+    initialDevCode
+      ? initialDevCode.slice(0, CODE_LENGTH).split('').concat(Array(Math.max(0, CODE_LENGTH - initialDevCode.length)).fill(''))
+      : Array(CODE_LENGTH).fill('')
   );
   const [loading, setLoading] = useState(false);
 
-  // Create refs for each input field
-  const inputRefs = useRef<(TextInput | null)[]>([null, null, null, null]);
+  // Input refs for auto-focus navigation
+  const inputRefs = useRef<(TextInput | null)[]>([]);
 
-  // Handle input change for each digit
+  // Handle single or multi-character change (e.g. paste)
   const handleCodeChange = (text: string, index: number) => {
-    // Only allow numbers
-    if (!/^\d*$/.test(text)) return;
+    const sanitized = text.replace(/[^0-9]/g, '');
 
-    // Handle pasting of full code
-    if (text.length > 1) {
-      // If user pastes a code, distribute it across the inputs
-      const digits = text.split('').slice(0, 4);
+    // Handle paste of entire code
+    if (sanitized.length > 1) {
+      const digits = sanitized.slice(0, CODE_LENGTH).split('');
       const newCode = [...verificationCode];
 
       digits.forEach((digit, i) => {
-        if (i < 4) newCode[i] = digit;
+        if (i < CODE_LENGTH) newCode[i] = digit;
       });
 
       setVerificationCode(newCode);
 
-      // Focus the last filled input or the next empty one
-      const lastIndex = Math.min(index + digits.length, 3);
+      const nextFocus = Math.min(digits.length, CODE_LENGTH - 1);
       setTimeout(() => {
-        inputRefs.current[lastIndex]?.focus();
-      }, 0);
-
+        inputRefs.current[nextFocus]?.focus();
+      }, 10);
       return;
     }
 
     const newCode = [...verificationCode];
-    newCode[index] = text;
+    newCode[index] = sanitized;
     setVerificationCode(newCode);
 
-    // Auto-focus next input if current input is filled
-    if (text.length === 1 && index < 3) {
-      // Focus the next input with a slight delay to ensure it works on all devices
+    // Auto-focus next input if filled
+    if (sanitized.length === 1 && index < CODE_LENGTH - 1) {
       setTimeout(() => {
         inputRefs.current[index + 1]?.focus();
       }, 10);
     }
   };
 
-  // Handle key press to enable backspace navigation
+  // Backspace key handling
   const handleKeyPress = (e: any, index: number) => {
-    // If backspace is pressed, handle navigation
     if (e.nativeEvent.key === 'Backspace') {
-      // If current field is empty or we're deleting the content, focus previous field
-      if ((verificationCode[index] === '' || e.nativeEvent.key === 'Backspace') && index > 0) {
-        // Clear current field if it has content
-        if (verificationCode[index] !== '') {
-          const newCode = [...verificationCode];
-          newCode[index] = '';
-          setVerificationCode(newCode);
-        }
-
-        // Focus previous field with a slight delay
+      if (verificationCode[index] === '' && index > 0) {
+        const newCode = [...verificationCode];
+        newCode[index - 1] = '';
+        setVerificationCode(newCode);
         setTimeout(() => {
           inputRefs.current[index - 1]?.focus();
         }, 10);
@@ -76,29 +79,34 @@ export function VerificationScreen() {
     }
   };
 
-  // Handle verification
+  // Submit OTP Verification
   const handleVerify = async () => {
-    // Check if code is complete
-    const code = verificationCode.join('');
-    if (code.length !== 4) {
-      Alert.alert('Invalid Code', 'Please enter the complete 4-digit verification code');
+    const code = verificationCode.join('').trim();
+    if (code.length < 4) {
+      Alert.alert(
+        'Invalid Code',
+        `Please enter the verification code sent to your email.`
+      );
       return;
     }
 
     setLoading(true);
     try {
-      // Call the verify API
       await authService.verify(email, code);
 
-      // Navigate to profile setup screen
-      router.replace('/profile-setup');
+      // Check if user already completed profile
+      const existingProfile = await profileService.getProfile();
+      if (existingProfile && existingProfile.name && existingProfile.name !== 'Friend') {
+        router.replace('/(tabs)');
+      } else {
+        router.replace('/profile-setup');
+      }
     } catch (error: any) {
       console.error('Verification error:', error);
-
-      // Show a user-friendly error message
       Alert.alert(
-        'Verification Error',
-        'Invalid verification code. Please check your email and try again.',
+        'Verification Failed',
+        error?.message ||
+          'Invalid or expired verification code. Please check your email and try again.',
         [{ text: 'OK' }]
       );
     } finally {
@@ -106,47 +114,28 @@ export function VerificationScreen() {
     }
   };
 
-  // Auto-fill the verification code (for accessibility)
-  const autoFillCode = (code: string) => {
-    if (!code || code.length !== 4) return;
-
-    const digits = code.split('');
-    setVerificationCode(digits);
-  };
-
-  // Handle resend code
+  // Resend code via Supabase
   const handleResend = async () => {
     if (!email) {
-      Alert.alert('Error', 'Email address is missing');
+      Alert.alert('Error', 'Email address is missing.');
       return;
     }
 
     setLoading(true);
     try {
-      // Call the login API to resend code
-      const response = await authService.login(email);
-
-      const returnedCode = response?.devCode || response?.code;
-      if (returnedCode) {
-        const codeStr = String(returnedCode);
-        setDevCode(codeStr);
-        setVerificationCode(codeStr.slice(0, 4).split(''));
-        Alert.alert('Verification Code', `Your verification code is: ${codeStr}`);
-      } else {
-        setVerificationCode(['', '', '', '']);
-        setTimeout(() => {
-          inputRefs.current[0]?.focus();
-        }, 100);
-        Alert.alert('Success', 'A new 4-digit verification code has been sent to your email');
-      }
-    } catch (error: any) {
-      console.error('Resend code error:', error);
-
-      // Show an error message
+      await authService.login(email);
+      setVerificationCode(Array(CODE_LENGTH).fill(''));
+      setTimeout(() => {
+        inputRefs.current[0]?.focus();
+      }, 100);
       Alert.alert(
-        'Error',
-        'Failed to resend verification code. Please try again later.',
-        [{ text: 'OK' }]
+        'Code Sent',
+        'A fresh verification code has been dispatched to your email inbox.'
+      );
+    } catch (error: any) {
+      Alert.alert(
+        'Resend Failed',
+        error?.message || 'Unable to resend verification code right now. Please try again.'
       );
     } finally {
       setLoading(false);
@@ -161,25 +150,28 @@ export function VerificationScreen() {
       <View style={styles.content}>
         <Text style={styles.title}>Verification</Text>
         <Text style={styles.subtitle}>
-          We've sent a 4-digit verification code to {email || 'your email'}.
-          Please enter it below.
+          We've sent a verification code to{' '}
+          <Text style={styles.emailHighlight}>{email || 'your email'}</Text>.
         </Text>
 
         <View style={styles.emailInfoContainer}>
           <Text style={styles.emailInfoText}>
-            Please check your email inbox for the verification code.
-          </Text>
-          <Text style={styles.emailInfoDetail}>
-            If you don't see it, check your spam folder or try the "Resend Code" option below.
+            Check your inbox or spam folder for your Supabase login code.
           </Text>
         </View>
 
         {devCode ? (
           <View style={styles.devCodeBadge}>
             <Text style={styles.devCodeBadgeText}>
-              Dev Code: <Text style={{ fontWeight: 'bold', color: '#FF7E45' }}>{devCode}</Text>
+              Code: <Text style={{ fontWeight: 'bold', color: '#FF7E45' }}>{devCode}</Text>
             </Text>
-            <TouchableOpacity onPress={() => setVerificationCode(devCode.slice(0, 4).split(''))}>
+            <TouchableOpacity
+              onPress={() => {
+                const digits = devCode.slice(0, CODE_LENGTH).split('');
+                const full = digits.concat(Array(Math.max(0, CODE_LENGTH - digits.length)).fill(''));
+                setVerificationCode(full);
+              }}
+            >
               <Text style={styles.devCodeBadgeAction}>Auto-Fill</Text>
             </TouchableOpacity>
           </View>
@@ -189,12 +181,12 @@ export function VerificationScreen() {
           {verificationCode.map((digit, index) => (
             <TextInput
               key={index}
-              ref={(ref) => { inputRefs.current[index] = ref }}
+              ref={(ref) => {
+                inputRefs.current[index] = ref;
+              }}
               style={[
                 styles.codeInput,
                 digit ? styles.codeInputFilled : {},
-                index === 0 && styles.codeInputFirst,
-                index === 3 && styles.codeInputLast
               ]}
               value={digit}
               onChangeText={(text) => handleCodeChange(text, index)}
@@ -217,7 +209,7 @@ export function VerificationScreen() {
           {loading ? (
             <ActivityIndicator color="white" size="small" />
           ) : (
-            <Text style={styles.verifyButtonText}>Verify</Text>
+            <Text style={styles.verifyButtonText}>Verify & Continue</Text>
           )}
         </TouchableOpacity>
 
@@ -249,100 +241,35 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    marginBottom: 12,
+    marginBottom: 10,
     textAlign: 'center',
+    color: '#0F172A',
   },
   subtitle: {
-    fontSize: 16,
-    color: '#666',
-    marginBottom: 32,
+    fontSize: 15,
+    color: '#64748B',
+    marginBottom: 24,
     textAlign: 'center',
+    lineHeight: 22,
   },
-  codeContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 32,
-    width: '80%',
-    maxWidth: 280,
+  emailHighlight: {
+    fontWeight: '600',
+    color: '#0F172A',
   },
-  codeInput: {
-    width: 65,
-    height: 65,
-    borderWidth: 2,
-    borderColor: '#ccc',
-    borderRadius: 12,
-    fontSize: 32,
-    fontWeight: 'bold',
-    marginHorizontal: 5,
-    backgroundColor: '#f9f9f9',
-    color: '#FF7E45',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  codeInputFilled: {
-    borderColor: '#FF7E45',
-    backgroundColor: '#FFF5F0',
-  },
-  codeInputFirst: {
-    marginLeft: 0,
-  },
-  codeInputLast: {
-    marginRight: 0,
-  },
-  verifyButton: {
-    backgroundColor: '#FF7E45',
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderRadius: 50,
-    width: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-    height: 56,
-  },
-  disabledButton: {
-    backgroundColor: '#FFB599',
-  },
-  verifyButtonText: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  resendButton: {
-    padding: 12,
-  },
-  resendButtonText: {
-    color: '#FF7E45',
-    fontSize: 16,
-  },
-  disabledText: {
-    color: '#999',
-  },
-
   emailInfoContainer: {
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#F8FAFC',
     borderWidth: 1,
-    borderColor: '#dee2e6',
-    borderRadius: 8,
-    padding: 16,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    padding: 14,
     marginBottom: 24,
     width: '100%',
   },
   emailInfoText: {
-    fontSize: 15,
-    color: '#495057',
-    marginBottom: 8,
+    fontSize: 13,
+    color: '#475569',
     textAlign: 'center',
     fontWeight: '500',
-  },
-  emailInfoDetail: {
-    fontSize: 13,
-    color: '#6c757d',
-    textAlign: 'center',
   },
   devCodeBadge: {
     flexDirection: 'row',
@@ -351,7 +278,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF4EE',
     borderWidth: 1,
     borderColor: '#FF7E45',
-    borderRadius: 8,
+    borderRadius: 10,
     paddingHorizontal: 16,
     paddingVertical: 10,
     marginBottom: 20,
@@ -368,4 +295,69 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     paddingHorizontal: 8,
   },
+  codeContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 32,
+    width: '100%',
+  },
+  codeInput: {
+    width: 46,
+    height: 56,
+    borderWidth: 2,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    fontSize: 24,
+    fontWeight: 'bold',
+    backgroundColor: '#F8FAFC',
+    color: '#FF7E45',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  codeInputFilled: {
+    borderColor: '#FF7E45',
+    backgroundColor: '#FFF5F0',
+  },
+  verifyButton: {
+    backgroundColor: '#FF7E45',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 50,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+    height: 56,
+    shadowColor: '#FF7E45',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  disabledButton: {
+    backgroundColor: '#FFB599',
+    shadowOpacity: 0,
+  },
+  verifyButtonText: {
+    color: 'white',
+    fontSize: 17,
+    fontWeight: 'bold',
+  },
+  resendButton: {
+    padding: 12,
+  },
+  resendButtonText: {
+    color: '#FF7E45',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  disabledText: {
+    color: '#94A3B8',
+  },
 });
+export default VerificationScreen;

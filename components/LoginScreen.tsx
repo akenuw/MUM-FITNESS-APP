@@ -27,20 +27,21 @@ export function LoginScreen() {
       const response = await authService.login(email);
       console.log('Login response:', response);
 
-      const devCode = response?.devCode || response?.code || '';
+      const res = response as any;
+      const devCode = res?.devCode || res?.code || '';
 
       // Navigate to verification screen with email and devCode parameters
       router.push({
         pathname: '/verification',
         params: { email, ...(devCode ? { devCode } : {}) }
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Login error:', error);
 
       // Show a user-friendly error message
       Alert.alert(
         'Login Error',
-        'There was a problem sending the verification code. Please try again.',
+        error?.message || 'There was a problem sending the verification code. Please try again.',
         [{ text: 'OK' }]
       );
     } finally {
