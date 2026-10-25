@@ -45,7 +45,7 @@ const workoutCategories = [
   { id: 2, title: 'Strength & Bone', icon: 'weight-lifter' },
   { id: 3, title: 'Flexibility & Recovery', icon: 'yoga' },
   { id: 4, title: 'Energy & Vitality', icon: 'lightning-bolt' },
-  { id: 5, title: 'Balance & Stability', icon: 'balance-scale' },
+  { id: 5, title: 'Balance & Stability', icon: 'scale-balance' },
   { id: 6, title: 'Mindfulness & Breath', icon: 'meditation' },
 ];
 
