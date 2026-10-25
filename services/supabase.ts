@@ -5,7 +5,7 @@ import { Platform } from 'react-native';
 
 const supabaseUrl =
   process.env.EXPO_PUBLIC_SUPABASE_URL ||
-  'https://pceftrjxczfkyvdpoybv.supabase.co';
+  'https://ihyfsvyynoafkvpqhcjz.supabase.co';
 
 const supabaseAnonKey =
   process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ||

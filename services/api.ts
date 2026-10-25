@@ -4,7 +4,7 @@ import { supabase } from './supabase';
 export function getBaseUrl() {
   return (
     process.env.EXPO_PUBLIC_SUPABASE_URL ||
-    'https://pceftrjxczfkyvdpoybv.supabase.co'
+    'https://ihyfsvyynoafkvpqhcjz.supabase.co'
   );
 }
 
