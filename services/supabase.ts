@@ -9,7 +9,7 @@ const supabaseUrl =
 
 const supabaseAnonKey =
   process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ||
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBjZWZ0cmp4Y3pma3l2ZHBveWJ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIyNTgzOTUsImV4cCI6MjEwNzgzNDM5NX0.iFbTBOIhAJi9skTmXbit3_TAeB0urpdp4cW09mg7erY';
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImloeWZzdnl5bm9hZmt2cHFoY2p6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI5MzEyNDgsImV4cCI6MjEwODUwNzI0OH0.u9_FqBTMh75ptmKksTVl_6Z4IFad5UlBoBbH7X4hGNo';
 
 const ExpoSecureStoreAdapter = {
   getItem: async (key: string): Promise<string | null> => {
