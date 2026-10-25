@@ -8,6 +8,21 @@ export function getBaseUrl() {
   );
 }
 
+function normalizeError(error: any): Error {
+  const msg = error?.message || String(error);
+  if (
+    msg.includes('UnknownHostException') ||
+    msg.includes('Unable to resolve host') ||
+    msg.includes('Network request failed') ||
+    msg.includes('Failed to fetch')
+  ) {
+    return new Error(
+      'Internet connection error: Your phone cannot reach Supabase cloud servers. Please check your phone Wi-Fi/mobile data, toggle Airplane Mode for 5 seconds to clear DNS cache, and try again.'
+    );
+  }
+  return error;
+}
+
 export const authService = {
   /**
    * Create account with email & password.
@@ -44,7 +59,7 @@ export const authService = {
       };
     } catch (error: any) {
       console.warn('Supabase signUp error:', error.message || error);
-      throw error;
+      throw normalizeError(error);
     }
   },
 
@@ -74,7 +89,7 @@ export const authService = {
       };
     } catch (error: any) {
       console.warn('Supabase login error:', error.message || error);
-      throw error;
+      throw normalizeError(error);
     }
   },
 
@@ -139,7 +154,7 @@ export const authService = {
       };
     } catch (error: any) {
       console.warn('Supabase verifyOtp error:', error.message || error);
-      throw error;
+      throw normalizeError(error);
     }
   },
 
