@@ -17,6 +17,7 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { authService, profileService } from '@/services/api';
+import { ProfileSkeleton } from '@/components/SkeletonLoader';
 import Storage from '@/utils/storage';
 
 export default function ProfileScreen() {
@@ -119,6 +120,16 @@ export default function ProfileScreen() {
       ]
     );
   };
+
+  if (loading) {
+    return (
+      <View style={[styles.container, { paddingTop: Math.max(insets.top, 16) }]}>
+        <ScrollView showsVerticalScrollIndicator={false}>
+          <ProfileSkeleton />
+        </ScrollView>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { paddingTop: Math.max(insets.top, 16) }]}>

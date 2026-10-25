@@ -14,11 +14,13 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Colors } from '@/constants/Colors';
+import { DashboardSkeleton } from '@/components/SkeletonLoader';
 import { profileService } from '@/services/api';
 import Storage from '@/utils/storage';
 
 export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [userName, setUserName] = useState('Friend');
   const [waterGlasses, setWaterGlasses] = useState(3);
@@ -52,6 +54,7 @@ export default function DashboardScreen() {
     } catch (e) {
       console.log('Error loading dashboard profile:', e);
     } finally {
+      setLoading(false);
       setRefreshing(false);
     }
   };
@@ -75,6 +78,16 @@ export default function DashboardScreen() {
     month: 'short',
     day: 'numeric'
   });
+
+  if (loading) {
+    return (
+      <View style={[styles.container, { paddingTop: Math.max(insets.top, 16) }]}>
+        <ScrollView showsVerticalScrollIndicator={false}>
+          <DashboardSkeleton />
+        </ScrollView>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { paddingTop: Math.max(insets.top, 16) }]}>

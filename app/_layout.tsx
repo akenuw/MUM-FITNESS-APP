@@ -25,17 +25,10 @@ export default function RootLayout() {
   const [showOnboarding, setShowOnboarding] = useState(!Storage.get('hasCompletedOnboarding', false));
   const [useSimpleSplash, setUseSimpleSplash] = useState(false);
 
-  // Simulate splash screen timing
+  // Fast, instant transition as soon as fonts are loaded
   useEffect(() => {
     if (loaded) {
-      // Show splash for 4 seconds to ensure animation completes
-      // The last letter appears at ~2.25s (500ms initial delay + 7*250ms letter delays)
-      // Plus ~1s for the drop animation and ~0.75s buffer
-      const timer = setTimeout(() => {
-        setShowSplash(false);
-      }, 4000);
-
-      return () => clearTimeout(timer);
+      setShowSplash(false);
     }
   }, [loaded]);
 

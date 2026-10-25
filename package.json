@@ -8,12 +8,8 @@
     "ios": "npx expo start --ios",
     "web": "npx expo start --web",
     "lint": "expo lint",
-    "backend": "cd backend && npm run dev",
     "dev": "npx expo start",
-    "legacy:dev": "concurrently \"npm run start\" \"npm run backend\"",
-    "install:all": "npm install && cd backend && npm install",
-    "clear-cache": "npx expo start --clear",
-    "simple": "npx expo start --no-dev --minify"
+    "clear-cache": "npx expo start --clear"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.2",
@@ -23,7 +19,6 @@
     "@react-navigation/elements": "^2.3.8",
     "@react-navigation/native": "^7.1.6",
     "@supabase/supabase-js": "^2.109.0",
-    "axios": "^1.6.2",
     "caniuse-lite": "^1.0.30001813",
     "dotenv": "^16.5.0",
     "expo": "~57.0.26",
@@ -42,7 +37,6 @@
     "expo-symbols": "~57.0.3",
     "expo-system-ui": "~57.0.4",
     "expo-web-browser": "~57.0.3",
-    "nodemailer": "^7.0.3",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.3",
