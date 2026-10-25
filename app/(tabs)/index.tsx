@@ -2,347 +2,458 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-  Image,
+  Dimensions,
+  Platform,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
-  View
+  View,
 } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Svg, {
+  Circle,
+  Defs,
+  LinearGradient,
+  Path,
+  Rect,
+  Stop,
+  G,
+  Line,
+} from 'react-native-svg';
 
-import { Colors } from '@/constants/Colors';
-import { DashboardSkeleton } from '@/components/SkeletonLoader';
 import { profileService } from '@/services/api';
 import Storage from '@/utils/storage';
 
-export default function DashboardScreen() {
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+// Data points for the 7-day activities spline chart matching mockup
+const WEEKLY_DATA = [
+  { day: 'Sat', value: 120, label: '120 kcl' },
+  { day: 'Sun', value: 236, label: '236 kcl' }, // Highlighted in mockup
+  { day: 'Mon', value: 180, label: '180 kcl' },
+  { day: 'Tue', value: 150, label: '150 kcl' },
+  { day: 'Wed', value: 210, label: '210 kcl' },
+  { day: 'Thu', value: 130, label: '130 kcl' },
+  { day: 'Fri', value: 195, label: '195 kcl' },
+];
+
+export default function HomeScreen() {
   const insets = useSafeAreaInsets();
-  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [userName, setUserName] = useState('Friend');
-  const [waterGlasses, setWaterGlasses] = useState(3);
-  const [steps, setSteps] = useState(3420);
-  const [activeMins, setActiveMins] = useState(20);
-  const [streakDays, setStreakDays] = useState([
-    { day: 'M', completed: true, label: 'Mon' },
-    { day: 'T', completed: true, label: 'Tue' },
-    { day: 'W', completed: true, label: 'Wed', isToday: true },
-    { day: 'T', completed: false, label: 'Thu' },
-    { day: 'F', completed: false, label: 'Fri' },
-    { day: 'S', completed: false, label: 'Sat' },
-    { day: 'S', completed: false, label: 'Sun' },
-  ]);
+  const [userName, setUserName] = useState('Lina');
+  const [selectedDayIndex, setSelectedDayIndex] = useState(1); // Default to Sunday (index 1)
 
   useEffect(() => {
-    loadData();
+    loadUserData();
   }, []);
 
-  const loadData = async () => {
+  const loadUserData = async () => {
     try {
-      const savedWater = Storage.get('today_water_glasses', null);
-      if (savedWater !== null) {
-        setWaterGlasses(Number(savedWater));
-      }
-
       const profile = await profileService.getProfile();
       if (profile && profile.name) {
         setUserName(profile.name.split(' ')[0]);
       }
     } catch (e) {
-      console.log('Error loading dashboard profile:', e);
+      console.log('Error loading user profile:', e);
     } finally {
-      setLoading(false);
       setRefreshing(false);
     }
   };
 
-  const handleAddWater = () => {
-    const updated = Math.min(waterGlasses + 1, 12);
-    setWaterGlasses(updated);
-    Storage.set('today_water_glasses', updated);
-  };
-
   const onRefresh = () => {
     setRefreshing(true);
-    loadData();
+    loadUserData();
   };
 
-  // Dynamic greeting based on time of day
-  const hour = new Date().getHours();
-  const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+  // Dynamic formatted date e.g., "Thursday, 08 July"
   const todayFormatted = new Date().toLocaleDateString('en-US', {
     weekday: 'long',
-    month: 'short',
-    day: 'numeric'
+    day: '2-digit',
+    month: 'long',
   });
 
-  if (loading) {
-    return (
-      <View style={[styles.container, { paddingTop: Math.max(insets.top, 16) }]}>
-        <ScrollView showsVerticalScrollIndicator={false}>
-          <DashboardSkeleton />
-        </ScrollView>
-      </View>
-    );
-  }
+  // Spline Chart Dimensions & Coordinates
+  const chartWidth = SCREEN_WIDTH - 40 - 45; // subtract screen padding and y-axis width
+  const chartHeight = 150;
+  const maxValue = 400;
+
+  const points = WEEKLY_DATA.map((item, index) => {
+    const x = (index / (WEEKLY_DATA.length - 1)) * chartWidth;
+    const y = chartHeight - (item.value / maxValue) * chartHeight;
+    return { x, y, value: item.value, label: item.label, day: item.day };
+  });
+
+  // Generate smooth cubic Bézier curve path
+  const generateSplinePath = () => {
+    if (points.length === 0) return '';
+    let d = `M ${points[0].x} ${points[0].y}`;
+
+    for (let i = 0; i < points.length - 1; i++) {
+      const p0 = points[i === 0 ? i : i - 1];
+      const p1 = points[i];
+      const p2 = points[i + 1];
+      const p3 = points[i + 2] || p2;
+
+      // Catmull-Rom to Cubic Bézier conversion
+      const cp1x = p1.x + (p2.x - p0.x) / 6;
+      const cp1y = p1.y + (p2.y - p0.y) / 6;
+      const cp2x = p2.x - (p3.x - p1.x) / 6;
+      const cp2y = p2.y - (p3.y - p1.y) / 6;
+
+      d += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x} ${p2.y}`;
+    }
+    return d;
+  };
+
+  const splinePath = generateSplinePath();
+  const areaPath = `${splinePath} L ${points[points.length - 1].x} ${chartHeight} L ${points[0].x} ${chartHeight} Z`;
+
+  const activePoint = points[selectedDayIndex] || points[1];
 
   return (
-    <View style={[styles.container, { paddingTop: Math.max(insets.top, 16) }]}>
-      {/* Top Header */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <Text style={styles.dateText}>{todayFormatted}</Text>
-          <Text style={styles.greetingTitle}>
-            {greeting}, <Text style={styles.nameHighlight}>{userName}</Text>
-          </Text>
-        </View>
-        <TouchableOpacity
-          style={styles.profileButton}
-          activeOpacity={0.8}
-          onPress={() => router.push('/(tabs)/profile')}
-        >
-          <Image
-            source={require('@/assets/images/image1.png')}
-            style={styles.profileImage}
-          />
-        </TouchableOpacity>
-      </View>
-
+    <View style={[styles.container, { paddingTop: Math.max(insets.top, 18) }]}>
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 90 }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 95 }]}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.light.primary} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#0F8B8D" />
         }
       >
-        {/* Today's Focus Card */}
-        <Animated.View entering={FadeInDown.duration(400).delay(100)}>
-          <View style={styles.heroCard}>
-            <View style={styles.heroBadgeRow}>
-              <View style={styles.heroBadge}>
-                <Ionicons name="sparkles" size={13} color="#FF6A3D" />
-                <Text style={styles.heroBadgeText}>TODAY'S GENTLE FOCUS</Text>
-              </View>
-              <Text style={styles.heroDuration}>15 mins • Low Impact</Text>
-            </View>
-
-            <Text style={styles.heroTitle}>Gentle Morning Movement & Joint Mobility</Text>
-            <Text style={styles.heroDescription}>
-              A restorative routine designed to relieve morning stiffness, improve circulation, and renew your energy gently.
-            </Text>
-
-            <View style={styles.heroFooter}>
-              <TouchableOpacity
-                style={styles.startSessionButton}
-                activeOpacity={0.85}
-                onPress={() => router.push('/(tabs)/workouts')}
-              >
-                <Text style={styles.startSessionText}>Start Workout</Text>
-                <Ionicons name="play" size={16} color="#FFFFFF" style={{ marginLeft: 6 }} />
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.previewButton}
-                activeOpacity={0.7}
-                onPress={() => router.push('/(tabs)/workouts')}
-              >
-                <Text style={styles.previewButtonText}>Browse All</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </Animated.View>
-
-        {/* Weekly Consistency Strip */}
-        <Animated.View entering={FadeInDown.duration(400).delay(180)} style={styles.sectionContainer}>
-          <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>Weekly Momentum</Text>
-            <Text style={styles.streakSub}>3 of 5 active days</Text>
-          </View>
-
-          <View style={styles.weekStrip}>
-            {streakDays.map((item, idx) => (
-              <View key={idx} style={styles.dayCol}>
-                <View
-                  style={[
-                    styles.dayBubble,
-                    item.completed && styles.dayBubbleCompleted,
-                    item.isToday && !item.completed && styles.dayBubbleToday,
-                  ]}
-                >
-                  {item.completed ? (
-                    <Ionicons name="checkmark" size={16} color="#FFFFFF" />
-                  ) : (
-                    <Text
-                      style={[
-                        styles.dayInitial,
-                        item.isToday ? styles.dayInitialToday : styles.dayInitialInactive
-                      ]}
-                    >
-                      {item.day}
-                    </Text>
-                  )}
-                </View>
-                <Text style={[styles.dayLabel, item.isToday && styles.dayLabelToday]}>
-                  {item.label}
-                </Text>
-              </View>
-            ))}
-          </View>
-        </Animated.View>
-
-        {/* Daily Wellness Glance */}
-        <Animated.View entering={FadeInDown.duration(400).delay(260)} style={styles.sectionContainer}>
-          <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>Today's Wellness</Text>
-            <Text style={styles.sectionHint}>Updated just now</Text>
-          </View>
-
-          <View style={styles.statsGrid}>
-            {/* Steps Card */}
-            <View style={styles.statCard}>
-              <View style={styles.statIconBadge}>
-                <MaterialCommunityIcons name="shoe-print" size={20} color="#FF6A3D" />
-              </View>
-              <Text style={styles.statLabel}>Steps</Text>
-              <Text style={styles.statNumber}>{steps.toLocaleString()}</Text>
-              <Text style={styles.statSubText}>Goal: 6,000</Text>
-              <View style={styles.progressBarTrack}>
-                <View style={[styles.progressBarFill, { width: `${Math.min((steps / 6000) * 100, 100)}%` }]} />
-              </View>
-            </View>
-
-            {/* Active Minutes Card */}
-            <View style={styles.statCard}>
-              <View style={[styles.statIconBadge, { backgroundColor: '#E8F5E9' }]}>
-                <MaterialCommunityIcons name="heart-pulse" size={20} color="#2E7D32" />
-              </View>
-              <Text style={styles.statLabel}>Active Time</Text>
-              <Text style={styles.statNumber}>{activeMins} <Text style={styles.statUnit}>min</Text></Text>
-              <Text style={styles.statSubText}>Goal: 30 min</Text>
-              <View style={styles.progressBarTrack}>
-                <View
-                  style={[
-                    styles.progressBarFill,
-                    {
-                      width: `${Math.min((activeMins / 30) * 100, 100)}%`,
-                      backgroundColor: '#2E7D32'
-                    }
-                  ]}
+        {/* Top Header */}
+        <Animated.View entering={FadeInDown.duration(400)} style={styles.headerRow}>
+          <View style={styles.userInfoCol}>
+            {/* Avatar Circle with Tan Background */}
+            <TouchableOpacity
+              style={styles.avatarContainer}
+              activeOpacity={0.8}
+              onPress={() => router.push('/(tabs)/profile')}
+            >
+              <Svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+                <Circle cx="24" cy="24" r="24" fill="#E6C6A8" />
+                {/* Clean Stylized Avatar Illustration */}
+                {/* Hair / Hat Brim */}
+                <Path
+                  d="M10 24C10 24 16 19 24 19C32 19 38 24 38 24C38 24 35 22 24 22C13 22 10 24 10 24Z"
+                  fill="#75482F"
                 />
-              </View>
-            </View>
+                <Path
+                  d="M17 19C17 15 20 12 24 12C28 12 31 15 31 19H17Z"
+                  fill="#8A5A3B"
+                />
+                {/* Face & Features */}
+                <Circle cx="24" cy="25" r="7" fill="#D39F75" />
+                <Circle cx="22" cy="24" r="1" fill="#4A2E1B" />
+                <Circle cx="26" cy="24" r="1" fill="#4A2E1B" />
+                <Path
+                  d="M22.5 27.5C23 28.2 25 28.2 25.5 27.5"
+                  stroke="#4A2E1B"
+                  strokeWidth="1"
+                  strokeLinecap="round"
+                />
+                {/* Shoulders */}
+                <Path
+                  d="M15 42C15 35 18 32 24 32C30 32 33 35 33 42H15Z"
+                  fill="#2A2A2E"
+                />
+              </Svg>
+            </TouchableOpacity>
 
-            {/* Water Tracker Card */}
-            <View style={styles.statCard}>
-              <View style={[styles.statIconBadge, { backgroundColor: '#E0F2FE' }]}>
-                <MaterialCommunityIcons name="water" size={20} color="#0284C7" />
-              </View>
-              <Text style={styles.statLabel}>Hydration</Text>
-              <View style={styles.waterValueRow}>
-                <Text style={styles.statNumber}>{waterGlasses}</Text>
-                <Text style={styles.statUnit}> / 8 cups</Text>
-              </View>
-              <TouchableOpacity
-                style={styles.addWaterButton}
-                activeOpacity={0.7}
-                onPress={handleAddWater}
-              >
-                <Ionicons name="add" size={14} color="#0284C7" />
-                <Text style={styles.addWaterText}>+1 Cup</Text>
-              </TouchableOpacity>
+            <View style={styles.greetingCol}>
+              <Text style={styles.greetingTitle}>Hello {userName}!</Text>
+              <Text style={styles.dateSubtitle}>{todayFormatted}</Text>
             </View>
           </View>
-        </Animated.View>
 
-        {/* Nutrition Snapshot */}
-        <Animated.View entering={FadeInDown.duration(400).delay(340)} style={styles.sectionContainer}>
+          {/* Notification Bell Button with Coral Red Dot */}
           <TouchableOpacity
-            style={styles.nutritionPreviewCard}
-            activeOpacity={0.85}
-            onPress={() => router.push('/(tabs)/nutrition')}
+            style={styles.notificationBtn}
+            activeOpacity={0.7}
+            onPress={() => router.push('/(tabs)/profile')}
           >
-            <View style={styles.nutritionHeaderRow}>
-              <View>
-                <Text style={styles.nutritionCardBadge}>NOURISHMENT</Text>
-                <Text style={styles.nutritionCardTitle}>Daily Nourishment</Text>
-              </View>
-              <View style={styles.nutritionLinkIcon}>
-                <Ionicons name="chevron-forward" size={18} color="#64748B" />
-              </View>
-            </View>
-
-            <Text style={styles.nutritionCardSub}>
-              Prioritize light, nutrient-rich meals, electrolytes, and easy-to-digest wholesome snacks.
-            </Text>
-
-            <View style={styles.macroPillsRow}>
-              <View style={styles.macroPill}>
-                <Text style={styles.macroPillName}>Hydration</Text>
-                <Text style={styles.macroPillValue}>{waterGlasses * 250} ml</Text>
-              </View>
-              <View style={styles.macroPill}>
-                <Text style={styles.macroPillName}>Status</Text>
-                <Text style={[styles.macroPillValue, { color: '#2E7D32' }]}>Balanced</Text>
-              </View>
-              <View style={styles.macroPill}>
-                <Text style={styles.macroPillName}>Target</Text>
-                <Text style={styles.macroPillValue}>Wholesome</Text>
-              </View>
-            </View>
+            <Ionicons name="notifications-outline" size={22} color="#18181A" />
+            <View style={styles.notificationDot} />
           </TouchableOpacity>
         </Animated.View>
 
-        {/* Quick Supportive Actions */}
-        <Animated.View entering={FadeInDown.duration(400).delay(420)} style={styles.sectionContainer}>
-          <Text style={styles.sectionTitle}>Supportive Actions</Text>
-          <View style={styles.quickActionsRow}>
+        {/* Featured Yoga Class Carousel */}
+        <Animated.View entering={FadeInDown.duration(400).delay(80)} style={styles.carouselContainer}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.carouselScroll}
+            decelerationRate="fast"
+            snapToInterval={SCREEN_WIDTH * 0.82 + 14}
+          >
+            {/* Card 1: Yoga Class 101 */}
             <TouchableOpacity
-              style={styles.quickActionItem}
-              activeOpacity={0.75}
+              style={styles.heroCard}
+              activeOpacity={0.9}
               onPress={() => router.push('/(tabs)/workouts')}
             >
-              <View style={[styles.quickActionIcon, { backgroundColor: '#FFF4EE' }]}>
-                <MaterialCommunityIcons name="walk" size={24} color="#FF6A3D" />
+              {/* Left Yoga Character Illustration */}
+              <View style={styles.heroIllustWrap}>
+                <Svg width="86" height="86" viewBox="0 0 100 100" fill="none">
+                  {/* Subtle Glow Aura */}
+                  <Circle cx="50" cy="50" r="42" fill="rgba(255, 90, 78, 0.08)" />
+
+                  {/* Character Head & Bun */}
+                  <Circle cx="50" cy="26" r="10" fill="#D39F75" />
+                  <Circle cx="50" cy="14" r="5" fill="#18181A" />
+                  <Path d="M40 25C40 18 45 15 50 15C55 15 60 18 60 25H40Z" fill="#18181A" />
+
+                  {/* Torso in Vibrant Coral */}
+                  <Path
+                    d="M39 36C42 33 58 33 61 36L64 54C64 57 60 59 50 59C40 59 36 57 36 54L39 36Z"
+                    fill="#FF5A4E"
+                  />
+
+                  {/* Arms extended in calm mudra */}
+                  <Path
+                    d="M39 38L22 47C20 48 20 51 22 52L30 54"
+                    stroke="#FF5A4E"
+                    strokeWidth="5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  <Path
+                    d="M61 38L78 47C80 48 80 51 78 52L70 54"
+                    stroke="#FF5A4E"
+                    strokeWidth="5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  {/* Hands */}
+                  <Circle cx="21" cy="49" r="3" fill="#D39F75" />
+                  <Circle cx="79" cy="49" r="3" fill="#D39F75" />
+
+                  {/* Crossed Legs in Brand Teal */}
+                  <Path
+                    d="M26 62C26 56 36 56 50 56C64 56 74 56 74 62C74 68 62 70 50 70C38 70 26 68 26 62Z"
+                    fill="#0F8B8D"
+                  />
+                  {/* Crossed Feet */}
+                  <Circle cx="33" cy="63" r="4.5" fill="#D39F75" />
+                  <Circle cx="67" cy="63" r="4.5" fill="#D39F75" />
+
+                  {/* Sparkle Floating Stars */}
+                  <Path d="M18 28L19.5 32L24 33.5L19.5 35L18 39L16.5 35L12 33.5L16.5 32Z" fill="#FFB703" />
+                  <Path d="M80 22L81 25L84 26L81 27L80 30L79 27L76 26L79 25Z" fill="#FFB703" />
+                </Svg>
               </View>
-              <Text style={styles.quickActionText}>Gentle Walk</Text>
+
+              {/* Card Details */}
+              <View style={styles.heroContentWrap}>
+                <View style={styles.heroTopRow}>
+                  <Text style={styles.fitnessBadge}>FITNESS</Text>
+                  <Ionicons name="ellipsis-vertical" size={17} color="#8E9297" />
+                </View>
+
+                <Text style={styles.heroTitle}>Training Yoga{'\n'}Class 101</Text>
+                <Text style={styles.heroSubtitle}>Starting Date: 12 Apr</Text>
+              </View>
             </TouchableOpacity>
 
+            {/* Peeking Secondary Card (Card 2) */}
             <TouchableOpacity
-              style={styles.quickActionItem}
-              activeOpacity={0.75}
-              onPress={handleAddWater}
-            >
-              <View style={[styles.quickActionIcon, { backgroundColor: '#E0F2FE' }]}>
-                <MaterialCommunityIcons name="cup-water" size={24} color="#0284C7" />
-              </View>
-              <Text style={styles.quickActionText}>Log Water</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.quickActionItem}
-              activeOpacity={0.75}
+              style={styles.heroCardPeeking}
+              activeOpacity={0.9}
               onPress={() => router.push('/(tabs)/workouts')}
             >
-              <View style={[styles.quickActionIcon, { backgroundColor: '#F3E8FF' }]}>
-                <MaterialCommunityIcons name="meditation" size={24} color="#9333EA" />
+              <Svg width="70" height="90" viewBox="0 0 80 100" fill="none">
+                <Circle cx="40" cy="50" r="35" fill="rgba(15, 139, 141, 0.12)" />
+                {/* Peeking Runner Figure */}
+                <Circle cx="35" cy="24" r="9" fill="#D39F75" />
+                <Path d="M26 23C26 17 31 15 36 15C41 15 44 17 44 23H26Z" fill="#18181A" />
+                <Path d="M26 34C28 32 40 32 44 34L40 56H28L26 34Z" fill="#FF5A4E" />
+                <Path d="M25 56L18 76" stroke="#0F8B8D" strokeWidth="6" strokeLinecap="round" />
+                <Path d="M38 56L48 72" stroke="#0F8B8D" strokeWidth="6" strokeLinecap="round" />
+              </Svg>
+            </TouchableOpacity>
+          </ScrollView>
+        </Animated.View>
+
+        {/* Section: My Plan */}
+        <Animated.View entering={FadeInDown.duration(400).delay(150)} style={styles.sectionContainer}>
+          <Text style={styles.sectionHeaderTitle}>My Plan</Text>
+
+          <View style={styles.planCardsRow}>
+            {/* Card 1: Workout (Dark / Black) */}
+            <TouchableOpacity
+              style={styles.planCardDark}
+              activeOpacity={0.85}
+              onPress={() => router.push('/(tabs)/workouts')}
+            >
+              <View style={styles.planIconBadgeDark}>
+                <Svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                  <Path d="M7 17L17 7" stroke="#FFFFFF" strokeWidth="2.5" strokeLinecap="round" />
+                  <Path d="M13.5 5.5L18.5 10.5" stroke="#FFFFFF" strokeWidth="2.4" strokeLinecap="round" />
+                  <Path d="M5.5 13.5L10.5 18.5" stroke="#FFFFFF" strokeWidth="2.4" strokeLinecap="round" />
+                </Svg>
               </View>
-              <Text style={styles.quickActionText}>Mindful Pause</Text>
+              <Text style={styles.planTitleWhite}>Workout</Text>
+              <Text style={styles.planSubtitleMuted}>2 Hours</Text>
             </TouchableOpacity>
 
+            {/* Card 2: Running (Blush Pink) */}
             <TouchableOpacity
-              style={styles.quickActionItem}
-              activeOpacity={0.75}
+              style={styles.planCardPink}
+              activeOpacity={0.85}
+              onPress={() => router.push('/(tabs)/workouts')}
+            >
+              <View style={styles.planIconBadgePink}>
+                <MaterialCommunityIcons name="shoe-sneaker" size={19} color="#FF5A4E" />
+              </View>
+              <Text style={styles.planTitleDark}>Running</Text>
+              <Text style={styles.planSubtitleDark}>12 km</Text>
+            </TouchableOpacity>
+
+            {/* Card 3: Food (Ice Blue) */}
+            <TouchableOpacity
+              style={styles.planCardBlue}
+              activeOpacity={0.85}
               onPress={() => router.push('/(tabs)/nutrition')}
             >
-              <View style={[styles.quickActionIcon, { backgroundColor: '#E8F5E9' }]}>
-                <MaterialCommunityIcons name="food-apple-outline" size={24} color="#2E7D32" />
+              <View style={styles.planIconBadgeBlue}>
+                <Svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                  <Circle cx="12" cy="5.5" r="1.6" fill="#0F8B8D" />
+                  <Path
+                    d="M4.5 15.5C4.8 11.2 8 7.8 12 7.8C16 7.8 19.2 11.2 19.5 15.5H4.5Z"
+                    stroke="#0F8B8D"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  <Path d="M2.8 18.5H21.2" stroke="#0F8B8D" strokeWidth="2.1" strokeLinecap="round" />
+                </Svg>
               </View>
-              <Text style={styles.quickActionText}>Log Meal</Text>
+              <Text style={styles.planTitleDark}>Food</Text>
+              <Text style={styles.planSubtitleDark}>1832 kcal</Text>
             </TouchableOpacity>
+          </View>
+        </Animated.View>
+
+        {/* Section: Activites (Spline Chart) */}
+        <Animated.View entering={FadeInDown.duration(400).delay(220)} style={styles.sectionContainer}>
+          <View style={styles.chartHeaderRow}>
+            <Text style={styles.sectionHeaderTitle}>Activites</Text>
+            <View style={styles.dropdownBadge}>
+              <Text style={styles.dropdownBadgeText}>Weekly</Text>
+              <Ionicons name="chevron-down" size={14} color="#18181A" style={{ marginLeft: 3 }} />
+            </View>
+          </View>
+
+          {/* Interactive Spline Chart Container */}
+          <View style={styles.chartCard}>
+            <View style={styles.chartFlexRow}>
+              {/* Y-Axis Labels */}
+              <View style={styles.yAxisCol}>
+                <Text style={styles.axisLabelText}>400</Text>
+                <Text style={styles.axisLabelText}>300</Text>
+                <Text style={styles.axisLabelText}>200</Text>
+                <Text style={styles.axisLabelText}>100</Text>
+                <Text style={styles.axisLabelText}>00</Text>
+              </View>
+
+              {/* Chart SVG Canvas */}
+              <View style={styles.chartSvgArea}>
+                <Svg width={chartWidth} height={chartHeight} style={StyleSheet.absoluteFill}>
+                  <Defs>
+                    {/* Brand Teal Area Gradient */}
+                    <LinearGradient id="tealAreaGrad" x1="0" y1="0" x2="0" y2="1">
+                      <Stop offset="0%" stopColor="#0F8B8D" stopOpacity="0.22" />
+                      <Stop offset="100%" stopColor="#0F8B8D" stopOpacity="0.0" />
+                    </LinearGradient>
+                  </Defs>
+
+                  {/* Horizontal Guide Lines */}
+                  {[0, 1, 2, 3, 4].map((step) => {
+                    const lineY = (step / 4) * chartHeight;
+                    return (
+                      <Line
+                        key={step}
+                        x1="0"
+                        y1={lineY}
+                        x2={chartWidth}
+                        y2={lineY}
+                        stroke="#F0F2F5"
+                        strokeWidth="1"
+                      />
+                    );
+                  })}
+
+                  {/* Smooth Area Gradient Fill */}
+                  <Path d={areaPath} fill="url(#tealAreaGrad)" />
+
+                  {/* Smooth Brand Teal Curve Line */}
+                  <Path
+                    d={splinePath}
+                    stroke="#0F8B8D"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    fill="none"
+                  />
+
+                  {/* Vertical Dashed Line at Active Day (Mockup: Sunday) */}
+                  <Line
+                    x1={activePoint.x}
+                    y1={activePoint.y}
+                    x2={activePoint.x}
+                    y2={chartHeight}
+                    stroke="#0F8B8D"
+                    strokeWidth="1.6"
+                    strokeDasharray="4 4"
+                  />
+
+                  {/* Active Peak Dot: White Center with Brand Teal Ring */}
+                  <Circle
+                    cx={activePoint.x}
+                    cy={activePoint.y}
+                    r="4.5"
+                    fill="#FFFFFF"
+                    stroke="#0F8B8D"
+                    strokeWidth="2.4"
+                  />
+                </Svg>
+
+                {/* Floating Tooltip Pill (Positioned above active peak) */}
+                <View
+                  style={[
+                    styles.tooltipPill,
+                    {
+                      left: Math.max(0, Math.min(activePoint.x - 30, chartWidth - 60)),
+                      top: Math.max(0, activePoint.y - 34),
+                    },
+                  ]}
+                  pointerEvents="none"
+                >
+                  <Text style={styles.tooltipPillText}>{activePoint.label}</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* X-Axis Labels Row */}
+            <View style={styles.xAxisRow}>
+              {WEEKLY_DATA.map((item, index) => {
+                const isSelected = index === selectedDayIndex;
+                return (
+                  <TouchableOpacity
+                    key={item.day}
+                    style={styles.xAxisItem}
+                    activeOpacity={0.7}
+                    onPress={() => setSelectedDayIndex(index)}
+                  >
+                    <Text style={[styles.xAxisText, isSelected && styles.xAxisTextActive]}>
+                      {item.day}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
           </View>
         </Animated.View>
       </ScrollView>
@@ -353,389 +464,312 @@ export default function DashboardScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
     backgroundColor: '#FFFFFF',
-  },
-  headerLeft: {
-    flex: 1,
-  },
-  dateText: {
-    fontSize: 13,
-    color: '#64748B',
-    fontWeight: '500',
-    marginBottom: 2,
-    letterSpacing: 0.2,
-  },
-  greetingTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  nameHighlight: {
-    color: '#FF6A3D',
-  },
-  profileButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    borderWidth: 2,
-    borderColor: '#FFF4EE',
-    overflow: 'hidden',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  profileImage: {
-    width: '100%',
-    height: '100%',
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 18,
-    paddingTop: 18,
-  },
-  heroCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 12,
-    elevation: 2,
-    marginBottom: 22,
-  },
-  heroBadgeRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  heroBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFF4EE',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-  },
-  heroBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#FF6A3D',
-    marginLeft: 5,
-    letterSpacing: 0.5,
-  },
-  heroDuration: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  heroTitle: {
-    fontSize: 19,
-    fontWeight: '700',
-    color: '#0F172A',
-    lineHeight: 26,
-    marginBottom: 8,
-  },
-  heroDescription: {
-    fontSize: 14,
-    color: '#475569',
-    lineHeight: 21,
-    marginBottom: 18,
-  },
-  heroFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  startSessionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FF6A3D',
-    paddingVertical: 12,
     paddingHorizontal: 20,
-    borderRadius: 12,
-    shadowColor: '#FF6A3D',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 3,
+    paddingTop: 8,
   },
-  startSessionText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  previewButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  previewButtonText: {
-    color: '#475569',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  sectionContainer: {
-    marginBottom: 24,
-  },
-  sectionHeaderRow: {
+
+  /* Top Header Row */
+  headerRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    justifyContent: 'space-between',
+    marginBottom: 20,
+    marginTop: 4,
   },
-  sectionTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  streakSub: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#FF6A3D',
-  },
-  sectionHint: {
-    fontSize: 12,
-    color: '#94A3B8',
-  },
-  weekStrip: {
+  userInfoCol: {
     flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 14,
-    justifyContent: 'space-between',
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
-  },
-  dayCol: {
     alignItems: 'center',
-    flex: 1,
   },
-  dayBubble: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: '#F1F5F9',
+  avatarContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 6,
   },
-  dayBubbleCompleted: {
-    backgroundColor: '#FF6A3D',
+  greetingCol: {
+    marginLeft: 12,
   },
-  dayBubbleToday: {
-    borderWidth: 2,
-    borderColor: '#FF6A3D',
-    backgroundColor: '#FFF4EE',
-  },
-  dayInitial: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  dayInitialToday: {
-    color: '#FF6A3D',
-  },
-  dayInitialInactive: {
-    color: '#94A3B8',
-  },
-  dayLabel: {
-    fontSize: 11,
-    color: '#64748B',
-  },
-  dayLabelToday: {
-    color: '#0F172A',
+  greetingTitle: {
+    fontSize: 17,
     fontWeight: '700',
+    color: '#18181A',
+    letterSpacing: -0.2,
   },
-  statsGrid: {
+  dateSubtitle: {
+    fontSize: 13,
+    color: '#8E9297',
+    marginTop: 2,
+    fontWeight: '400',
+  },
+  notificationBtn: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#F0F2F5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 6,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
+  },
+  notificationDot: {
+    position: 'absolute',
+    top: 11,
+    right: 12,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#FF5A4E',
+  },
+
+  /* Featured Carousel */
+  carouselContainer: {
+    marginBottom: 24,
+    marginHorizontal: -20,
+  },
+  carouselScroll: {
+    paddingHorizontal: 20,
+  },
+  heroCard: {
+    width: SCREEN_WIDTH * 0.82,
+    height: 142,
+    borderRadius: 24,
+    backgroundColor: '#FDF3E7',
     flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginRight: 14,
+  },
+  heroIllustWrap: {
+    width: 86,
+    height: 86,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroContentWrap: {
+    flex: 1,
+    marginLeft: 12,
+    justifyContent: 'center',
+  },
+  heroTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  fitnessBadge: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#FF5A4E',
+    letterSpacing: 0.8,
+  },
+  heroTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#18181A',
+    lineHeight: 21,
+    marginTop: 4,
+  },
+  heroSubtitle: {
+    fontSize: 12,
+    color: '#8E9297',
+    marginTop: 4,
+    fontWeight: '400',
+  },
+  heroCardPeeking: {
+    width: 65,
+    height: 142,
+    borderRadius: 24,
+    backgroundColor: '#EAF6F8',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+
+  /* Section: My Plan */
+  sectionContainer: {
+    marginBottom: 26,
+  },
+  sectionHeaderTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#18181A',
+    letterSpacing: -0.2,
+    marginBottom: 14,
+  },
+  planCardsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     gap: 10,
   },
-  statCard: {
+  planCardDark: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    minHeight: 124,
+    borderRadius: 20,
+    backgroundColor: '#18181A',
     padding: 14,
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.03,
-    shadowRadius: 8,
-    elevation: 1,
+    justifyContent: 'space-between',
   },
-  statIconBadge: {
+  planIconBadgeDark: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#FFF4EE',
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  planTitleWhite: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginTop: 14,
+  },
+  planSubtitleMuted: {
+    fontSize: 12,
+    color: '#A0A5AA',
+    marginTop: 2,
+    fontWeight: '400',
+  },
+  planCardPink: {
+    flex: 1,
+    minHeight: 124,
+    borderRadius: 20,
+    backgroundColor: '#FDECEB',
+    padding: 14,
+    justifyContent: 'space-between',
+  },
+  planIconBadgePink: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 90, 78, 0.14)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  planCardBlue: {
+    flex: 1,
+    minHeight: 124,
+    borderRadius: 20,
+    backgroundColor: '#EAF6F8',
+    padding: 14,
+    justifyContent: 'space-between',
+  },
+  planIconBadgeBlue: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(15, 139, 141, 0.14)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  planTitleDark: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#18181A',
+    marginTop: 14,
+  },
+  planSubtitleDark: {
+    fontSize: 12,
+    color: '#8E9297',
+    marginTop: 2,
+    fontWeight: '400',
+  },
+
+  /* Spline Chart */
+  chartHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 10,
   },
-  statLabel: {
-    fontSize: 12,
-    color: '#64748B',
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  statNumber: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#0F172A',
-    marginBottom: 2,
-  },
-  statUnit: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#64748B',
-  },
-  statSubText: {
-    fontSize: 11,
-    color: '#94A3B8',
-    marginBottom: 8,
-  },
-  waterValueRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    marginBottom: 8,
-  },
-  progressBarTrack: {
-    height: 5,
-    backgroundColor: '#F1F5F9',
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  progressBarFill: {
-    height: '100%',
-    backgroundColor: '#FF6A3D',
-    borderRadius: 3,
-  },
-  addWaterButton: {
+  dropdownBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F0F9FF',
-    paddingVertical: 5,
+    paddingVertical: 4,
     paddingHorizontal: 8,
-    borderRadius: 8,
-    marginTop: 2,
   },
-  addWaterText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#0284C7',
-    marginLeft: 2,
+  dropdownBadgeText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#18181A',
   },
-  nutritionPreviewCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
+  chartCard: {
+    width: '100%',
+    paddingTop: 10,
   },
-  nutritionHeaderRow: {
+  chartFlexRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 8,
+    height: 150,
   },
-  nutritionCardBadge: {
+  yAxisCol: {
+    width: 38,
+    height: 150,
+    justifyContent: 'space-between',
+    paddingBottom: 4,
+  },
+  axisLabelText: {
+    fontSize: 11,
+    color: '#A0A5AA',
+    fontWeight: '400',
+  },
+  chartSvgArea: {
+    flex: 1,
+    height: 150,
+    position: 'relative',
+  },
+  tooltipPill: {
+    position: 'absolute',
+    backgroundColor: '#18181A',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tooltipPillText: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#2E7D32',
-    letterSpacing: 0.6,
-    marginBottom: 2,
+    color: '#FFFFFF',
+    letterSpacing: 0.2,
   },
-  nutritionCardTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  nutritionLinkIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#F8FAFC',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  nutritionCardSub: {
-    fontSize: 13,
-    color: '#475569',
-    lineHeight: 19,
-    marginBottom: 14,
-  },
-  macroPillsRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  macroPill: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-    borderRadius: 10,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    alignItems: 'center',
-  },
-  macroPillName: {
-    fontSize: 11,
-    color: '#64748B',
-    marginBottom: 2,
-  },
-  macroPillValue: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  quickActionsRow: {
+  xAxisRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: 8,
+    marginLeft: 38,
+    marginTop: 10,
   },
-  quickActionItem: {
-    flex: 1,
+  xAxisItem: {
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    paddingVertical: 12,
-    paddingHorizontal: 4,
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
+    paddingVertical: 4,
+    paddingHorizontal: 2,
   },
-  quickActionIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 6,
-  },
-  quickActionText: {
+  xAxisText: {
     fontSize: 11,
-    fontWeight: '600',
-    color: '#334155',
-    textAlign: 'center',
+    color: '#A0A5AA',
+    fontWeight: '500',
+  },
+  xAxisTextActive: {
+    color: '#18181A',
+    fontWeight: '700',
   },
 });
