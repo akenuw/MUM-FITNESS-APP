@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import {
   Alert,
   Dimensions,
+  Image,
   Modal,
   Platform,
   ScrollView,
@@ -25,6 +26,7 @@ import Svg, {
   Stop,
 } from 'react-native-svg';
 
+import { AIScannerModal } from '@/components/AIScannerModal';
 import Storage from '@/utils/storage';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -44,7 +46,7 @@ const SEVEN_DAYS: CalendarDay[] = [
   { date: 21, day: 'Sun' },
 ];
 
-interface MealItem {
+export interface MealItem {
   id: number;
   type: 'Breakfast' | 'Lunch' | 'Dinner' | 'Snacks';
   name: string;
@@ -53,11 +55,23 @@ interface MealItem {
   carbs: number;
   fat: number;
   time: string;
+  imageUri?: string;
 }
 
 const defaultMeals: MealItem[] = [
   {
     id: 1,
+    type: 'Breakfast',
+    name: 'Kiwi Smoothie Bowl with Granola',
+    calories: 450,
+    protein: 20,
+    carbs: 140,
+    fat: 12,
+    time: '8:15 AM',
+    imageUri: Image.resolveAssetSource(require('@/assets/images/kiwi-smoothie-bowl.jpg')).uri,
+  },
+  {
+    id: 2,
     type: 'Lunch',
     name: 'Steamed Wild Salmon with Quinoa & Greens',
     calories: 480,
@@ -65,16 +79,6 @@ const defaultMeals: MealItem[] = [
     carbs: 42,
     fat: 16,
     time: '1:15 PM',
-  },
-  {
-    id: 2,
-    type: 'Breakfast',
-    name: 'Warm Rolled Oats with Blueberries & Chia',
-    calories: 340,
-    protein: 12,
-    carbs: 58,
-    fat: 7,
-    time: '8:30 AM',
   },
   {
     id: 3,
@@ -93,9 +97,10 @@ export default function NutritionScreen() {
   const [selectedDayDate, setSelectedDayDate] = useState<number>(18); // Default 18 Thu as in mockup
   const [waterGlasses, setWaterGlasses] = useState<number>(3); // 3 glasses filled in mockup
   const [meals, setMeals] = useState<MealItem[]>([]);
-  const [showAddModal, setShowAddModal] = useState<boolean>(false);
+  const [showScanner, setShowScanner] = useState<boolean>(false);
+  const [showManualModal, setShowManualModal] = useState<boolean>(false);
 
-  // New Meal Form
+  // Manual Meal Form
   const [customName, setCustomName] = useState('');
   const [customCalories, setCustomCalories] = useState('');
   const [customType, setCustomType] = useState<'Breakfast' | 'Lunch' | 'Dinner' | 'Snacks'>('Lunch');
@@ -125,7 +130,33 @@ export default function NutritionScreen() {
     Storage.set('today_water_glasses', clamped);
   };
 
-  const handleAddCustomMeal = () => {
+  const handleSaveScannedMeal = (scanned: {
+    type: 'Breakfast' | 'Lunch' | 'Dinner' | 'Snacks';
+    name: string;
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+    imageUri: string;
+  }) => {
+    const newMeal: MealItem = {
+      id: Date.now(),
+      type: scanned.type,
+      name: scanned.name,
+      calories: scanned.calories,
+      protein: scanned.protein,
+      carbs: scanned.carbs,
+      fat: scanned.fat,
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      imageUri: scanned.imageUri,
+    };
+
+    const updated = [newMeal, ...meals];
+    setMeals(updated);
+    Storage.set('logged_meals', updated);
+  };
+
+  const handleAddManualMeal = () => {
     if (!customName.trim()) {
       Alert.alert('Missing Name', 'Please enter a name for this meal.');
       return;
@@ -148,7 +179,7 @@ export default function NutritionScreen() {
 
     setCustomName('');
     setCustomCalories('');
-    setShowAddModal(false);
+    setShowManualModal(false);
   };
 
   const handleDeleteMeal = (id: number) => {
@@ -157,9 +188,21 @@ export default function NutritionScreen() {
     Storage.set('logged_meals', updated);
   };
 
-  // Values matching reference mockup: 1456 kcal Consumed, 2875 kcal Remaining
-  const consumedCalories = 1456;
-  const remainingCalories = 2875;
+  // Dynamic calculations
+  const totalCaloriesLogged = meals.reduce((sum, m) => sum + (m.calories || 0), 0);
+  const totalProteinLogged = meals.reduce((sum, m) => sum + (m.protein || 0), 0);
+  const totalCarbsLogged = meals.reduce((sum, m) => sum + (m.carbs || 0), 0);
+  const totalFatLogged = meals.reduce((sum, m) => sum + (m.fat || 0), 0);
+
+  // Dynamic consumed and remaining matching mockup baseline (target = 4331)
+  const targetCalories = 4331;
+  const consumedCalories = Math.max(1456, totalCaloriesLogged);
+  const remainingCalories = Math.max(0, targetCalories - consumedCalories);
+
+  // Macro target goals
+  const proteinGoal = 70;
+  const carbsGoal = 160;
+  const fatGoal = 45;
 
   return (
     <View style={[styles.container, { paddingTop: Math.max(insets.top, 18) }]}>
@@ -170,7 +213,7 @@ export default function NutritionScreen() {
 
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 95 }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]}
         showsVerticalScrollIndicator={false}
       >
         {/* 7-Day Strip Calendar */}
@@ -223,7 +266,7 @@ export default function NutritionScreen() {
               <Svg width="116" height="116" viewBox="0 0 116 116" fill="none">
                 {/* Radial Tick Marks (Unconsumed Upper-Left Arc) */}
                 {Array.from({ length: 18 }).map((_, i) => {
-                  const angle = 125 + i * 8.5; // Spread around upper-left quadrant
+                  const angle = 125 + i * 8.5;
                   const rad = (angle * Math.PI) / 180;
                   const innerR = 43;
                   const outerR = 49;
@@ -246,7 +289,6 @@ export default function NutritionScreen() {
                 })}
 
                 {/* Coral Red Progress Arc (Consumed portion) */}
-                {/* Arc sweeping smoothly clockwise around 260 degrees */}
                 <Path
                   d="M 58 12 A 46 46 0 1 1 20 40"
                   stroke="#FF5A4E"
@@ -274,25 +316,55 @@ export default function NutritionScreen() {
           <View style={styles.macroBarsRow}>
             {/* Protein: Black */}
             <View style={styles.macroBarCol}>
-              <Text style={styles.macroBarLabel}>P - 10/12g</Text>
+              <Text style={styles.macroBarLabel}>
+                P - {Math.round(totalProteinLogged)}/{proteinGoal}g
+              </Text>
               <View style={styles.barTrack}>
-                <View style={[styles.barFill, { backgroundColor: '#18181A', width: '83%' }]} />
+                <View
+                  style={[
+                    styles.barFill,
+                    {
+                      backgroundColor: '#18181A',
+                      width: `${Math.min(100, Math.round((totalProteinLogged / proteinGoal) * 100))}%`,
+                    },
+                  ]}
+                />
               </View>
             </View>
 
             {/* Carbs: Teal */}
             <View style={styles.macroBarCol}>
-              <Text style={styles.macroBarLabel}>C - 10/12g</Text>
+              <Text style={styles.macroBarLabel}>
+                C - {Math.round(totalCarbsLogged)}/{carbsGoal}g
+              </Text>
               <View style={styles.barTrack}>
-                <View style={[styles.barFill, { backgroundColor: '#0F8B8D', width: '83%' }]} />
+                <View
+                  style={[
+                    styles.barFill,
+                    {
+                      backgroundColor: '#0F8B8D',
+                      width: `${Math.min(100, Math.round((totalCarbsLogged / carbsGoal) * 100))}%`,
+                    },
+                  ]}
+                />
               </View>
             </View>
 
             {/* Fat: Coral Red */}
             <View style={styles.macroBarCol}>
-              <Text style={styles.macroBarLabel}>F - 10/12g</Text>
+              <Text style={styles.macroBarLabel}>
+                F - {Math.round(totalFatLogged)}/{fatGoal}g
+              </Text>
               <View style={styles.barTrack}>
-                <View style={[styles.barFill, { backgroundColor: '#FF5A4E', width: '83%' }]} />
+                <View
+                  style={[
+                    styles.barFill,
+                    {
+                      backgroundColor: '#FF5A4E',
+                      width: `${Math.min(100, Math.round((totalFatLogged / fatGoal) * 100))}%`,
+                    },
+                  ]}
+                />
               </View>
             </View>
           </View>
@@ -316,14 +388,13 @@ export default function NutritionScreen() {
                   activeOpacity={0.7}
                   onPress={() => {
                     if (isFilled && glassNum === waterGlasses) {
-                      handleSetWater(glassNum - 1); // Decrement on tapping last filled
+                      handleSetWater(glassNum - 1);
                     } else {
                       handleSetWater(glassNum);
                     }
                   }}
                 >
                   <Svg width="34" height="46" viewBox="0 0 34 46" fill="none">
-                    {/* Glass Outline Container (tapered tumbler) */}
                     <Path
                       d="M5 4L8 41C8.2 42.5 9.5 43.5 11 43.5H23C24.5 43.5 25.8 42.5 26 41L29 4"
                       stroke={isFilled ? '#14939A' : '#C4D3D8'}
@@ -332,22 +403,18 @@ export default function NutritionScreen() {
                       strokeLinejoin="round"
                     />
 
-                    {/* Filled Water with Wave Crest & Bubbles */}
                     {isFilled && (
                       <G>
-                        {/* Wave Surface & Water Body */}
                         <Path
                           d="M6.5 16C9 14.5 13 17 17 15.5C21 14 25 16.5 27.5 15L26 41C25.8 42 24.5 43 23 43H11C9.5 43 8.2 42 8 41L6.5 16Z"
                           fill="#14939A"
                         />
-                        {/* Floating Air Bubbles */}
                         <Circle cx="12" cy="24" r="1.5" fill="#FFFFFF" fillOpacity="0.8" />
                         <Circle cx="21" cy="28" r="1.2" fill="#FFFFFF" fillOpacity="0.8" />
                         <Circle cx="15" cy="33" r="1.4" fill="#FFFFFF" fillOpacity="0.8" />
                       </G>
                     )}
 
-                    {/* Center Plus (+) on Next Empty Glass */}
                     {!isFilled && isNextAddGlass && (
                       <G>
                         <Path
@@ -364,7 +431,7 @@ export default function NutritionScreen() {
             })}
           </View>
 
-          {/* Interactive Slider Track matching filled percentage */}
+          {/* Interactive Slider Track */}
           <View style={styles.sliderTrackWrapper}>
             <View style={styles.sliderTrack}>
               <View
@@ -374,7 +441,6 @@ export default function NutritionScreen() {
                 ]}
               />
             </View>
-            {/* Slider Circular Thumb */}
             <View
               style={[
                 styles.sliderThumb,
@@ -384,39 +450,45 @@ export default function NutritionScreen() {
           </View>
         </Animated.View>
 
-        {/* Meal Log Section: Starting with Lunch Card as in Mockup */}
+        {/* Meal Log Section */}
         <Animated.View entering={FadeInDown.duration(400).delay(250)} style={styles.mealSection}>
           <View style={styles.mealSectionHeader}>
             <Text style={styles.mealSectionTitle}>Meals Logged</Text>
+            {/* AI Camera Add Meal Button Trigger */}
             <TouchableOpacity
               style={styles.addMealBtn}
               activeOpacity={0.7}
-              onPress={() => setShowAddModal(true)}
+              onPress={() => setShowScanner(true)}
             >
-              <Ionicons name="add" size={16} color="#0F8B8D" />
-              <Text style={styles.addMealBtnText}>Add Meal</Text>
+              <Ionicons name="camera-outline" size={17} color="#0F8B8D" style={{ marginRight: 4 }} />
+              <Text style={styles.addMealBtnText}>+ Add Meal</Text>
             </TouchableOpacity>
           </View>
 
-          {/* Lunch Card matching reference mockup */}
+          {/* Meal Cards: Renders the LIVE captured photo in the circular thumbnail */}
           {meals.map((item) => (
             <View key={item.id} style={styles.mealCard}>
-              {/* Circular Food Plate Illustration */}
+              {/* Circular Food Thumbnail: renders live scanned image or SVG fallback */}
               <View style={styles.foodPlateWrapper}>
-                <Svg width="46" height="46" viewBox="0 0 46 46" fill="none">
-                  {/* Plate Base */}
-                  <Circle cx="23" cy="23" r="21" fill="#FBF3EB" stroke="#F0E5D8" strokeWidth="1.5" />
-                  {/* Food Serving Art (Salmon slice & fresh greens) */}
-                  <Path
-                    d="M14 24C14 17 21 15 28 17C31 23 27 29 20 29C16 29 14 27 14 24Z"
-                    fill="#FF7E45"
+                {item.imageUri ? (
+                  <Image
+                    source={{ uri: item.imageUri }}
+                    style={styles.foodPlateImage}
+                    resizeMode="cover"
                   />
-                  <Path d="M18 20L25 24" stroke="#FFF" strokeWidth="1.2" strokeLinecap="round" />
-                  <Path d="M16 24L23 28" stroke="#FFF" strokeWidth="1.2" strokeLinecap="round" />
-                  {/* Greens Accents */}
-                  <Circle cx="28" cy="28" r="3.5" fill="#4CAF50" />
-                  <Circle cx="32" cy="24" r="2.5" fill="#81C784" />
-                </Svg>
+                ) : (
+                  <Svg width="48" height="48" viewBox="0 0 46 46" fill="none">
+                    <Circle cx="23" cy="23" r="21" fill="#FBF3EB" stroke="#F0E5D8" strokeWidth="1.5" />
+                    <Path
+                      d="M14 24C14 17 21 15 28 17C31 23 27 29 20 29C16 29 14 27 14 24Z"
+                      fill="#FF7E45"
+                    />
+                    <Path d="M18 20L25 24" stroke="#FFF" strokeWidth="1.2" strokeLinecap="round" />
+                    <Path d="M16 24L23 28" stroke="#FFF" strokeWidth="1.2" strokeLinecap="round" />
+                    <Circle cx="28" cy="28" r="3.5" fill="#4CAF50" />
+                    <Circle cx="32" cy="24" r="2.5" fill="#81C784" />
+                  </Svg>
+                )}
               </View>
 
               {/* Meal Details */}
@@ -442,18 +514,24 @@ export default function NutritionScreen() {
         </Animated.View>
       </ScrollView>
 
-      {/* Add Custom Meal Modal */}
-      <Modal visible={showAddModal} animationType="slide" transparent>
+      {/* AI Food Scanner Modal (Screen A & Screen B) */}
+      <AIScannerModal
+        visible={showScanner}
+        onClose={() => setShowScanner(false)}
+        onSaveMeal={handleSaveScannedMeal}
+      />
+
+      {/* Manual Add Meal Modal */}
+      <Modal visible={showManualModal} animationType="slide" transparent>
         <View style={styles.modalBackdrop}>
           <View style={styles.modalSheet}>
             <View style={styles.modalHeaderRow}>
-              <Text style={styles.modalTitle}>Log Meal</Text>
-              <TouchableOpacity onPress={() => setShowAddModal(false)}>
+              <Text style={styles.modalTitle}>Manual Log Meal</Text>
+              <TouchableOpacity onPress={() => setShowManualModal(false)}>
                 <Ionicons name="close" size={24} color="#18181A" />
               </TouchableOpacity>
             </View>
 
-            {/* Meal Type Selector */}
             <View style={styles.typeSelectorRow}>
               {(['Breakfast', 'Lunch', 'Dinner', 'Snacks'] as const).map((type) => (
                 <TouchableOpacity
@@ -476,7 +554,6 @@ export default function NutritionScreen() {
               ))}
             </View>
 
-            {/* Meal Name Input */}
             <Text style={styles.inputLabel}>Meal Description</Text>
             <TextInput
               style={styles.inputField}
@@ -486,7 +563,6 @@ export default function NutritionScreen() {
               onChangeText={setCustomName}
             />
 
-            {/* Calories Input */}
             <Text style={styles.inputLabel}>Calories (kcal)</Text>
             <TextInput
               style={styles.inputField}
@@ -497,11 +573,10 @@ export default function NutritionScreen() {
               onChangeText={setCustomCalories}
             />
 
-            {/* Submit Button */}
             <TouchableOpacity
               style={styles.submitBtn}
               activeOpacity={0.85}
-              onPress={handleAddCustomMeal}
+              onPress={handleAddManualMeal}
             >
               <Text style={styles.submitBtnText}>Save Meal</Text>
             </TouchableOpacity>
@@ -753,14 +828,15 @@ const styles = StyleSheet.create({
   addMealBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 4,
-    paddingHorizontal: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 14,
+    backgroundColor: 'rgba(15, 139, 141, 0.08)',
   },
   addMealBtnText: {
     fontSize: 13,
     fontWeight: '600',
     color: '#0F8B8D',
-    marginLeft: 2,
   },
   mealCard: {
     backgroundColor: '#FFFFFF',
@@ -784,10 +860,18 @@ const styles = StyleSheet.create({
     }),
   },
   foodPlateWrapper: {
-    width: 46,
-    height: 46,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: '#F8FAFC',
+  },
+  foodPlateImage: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
   },
   mealInfoCol: {
     flex: 1,
@@ -814,7 +898,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 
-  /* Modal */
+  /* Manual Modal */
   modalBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.4)',
