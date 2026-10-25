@@ -14,8 +14,11 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Colors } from '@/constants/Colors';
 import { authService } from '@/services/api';
 import { supabase } from '@/services/supabase';
+
+const PRIMARY_ORANGE = Colors.light.primary || '#FF7E45';
 
 export default function LoginScreen() {
   const insets = useSafeAreaInsets();
@@ -39,7 +42,7 @@ export default function LoginScreen() {
 
     setLoading(true);
     try {
-      // Direct login with email & password - NO OTP REQUIRED!
+      // Direct login with email & password - NO OTP REQUIRED
       await authService.loginWithPassword(cleanEmail, password);
 
       // Session is stored in device SecureStore -> Straight to the app!
@@ -91,16 +94,16 @@ export default function LoginScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Back Button */}
+        {/* 1. Back Control */}
         <TouchableOpacity
           style={styles.backButton}
           activeOpacity={0.8}
           onPress={() => router.back()}
         >
-          <Ionicons name="chevron-back" size={22} color="#0F172A" />
+          <Ionicons name="chevron-back" size={20} color="#0F172A" />
         </TouchableOpacity>
 
-        {/* Title & Subtitle */}
+        {/* 2. Heading & 3. Subtitle */}
         <View style={styles.header}>
           <Text style={styles.title}>Login account</Text>
           <Text style={styles.subtitle}>Welcome back!</Text>
@@ -108,7 +111,7 @@ export default function LoginScreen() {
 
         {/* Form Fields */}
         <View style={styles.form}>
-          {/* Email */}
+          {/* 4. Email Label and Input */}
           <View style={styles.fieldGroup}>
             <Text style={styles.label}>Email</Text>
             <View style={styles.inputContainer}>
@@ -131,7 +134,7 @@ export default function LoginScreen() {
             </View>
           </View>
 
-          {/* Password */}
+          {/* 5. Password Label and Input */}
           <View style={styles.fieldGroup}>
             <Text style={styles.label}>Password</Text>
             <View style={styles.inputContainer}>
@@ -153,7 +156,7 @@ export default function LoginScreen() {
               <TouchableOpacity
                 onPress={() => setShowPassword(!showPassword)}
                 style={styles.rightIcon}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
                 <Ionicons
                   name={showPassword ? 'eye-off-outline' : 'eye-outline'}
@@ -164,7 +167,7 @@ export default function LoginScreen() {
             </View>
           </View>
 
-          {/* Keep me logged in & Forgot password row */}
+          {/* 6. Remember-me Checkbox & Forgot Password Link */}
           <View style={styles.optionsRow}>
             <TouchableOpacity
               style={styles.checkboxRow}
@@ -178,7 +181,7 @@ export default function LoginScreen() {
                 ]}
               >
                 {keepLoggedIn && (
-                  <Ionicons name="checkmark" size={14} color="#FFFFFF" />
+                  <Ionicons name="checkmark" size={13} color="#FFFFFF" />
                 )}
               </View>
               <Text style={styles.checkboxLabel}>Keep me logged in</Text>
@@ -192,22 +195,22 @@ export default function LoginScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Login Button */}
+          {/* 7. Orange Login Button */}
           <TouchableOpacity
             style={[styles.primaryButton, loading && styles.buttonDisabled]}
-            activeOpacity={0.85}
+            activeOpacity={0.88}
             onPress={handleLogin}
             disabled={loading}
           >
             {loading ? (
-              <ActivityIndicator color="#0F172A" size="small" />
+              <ActivityIndicator color="#FFFFFF" size="small" />
             ) : (
               <Text style={styles.primaryButtonText}>Login</Text>
             )}
           </TouchableOpacity>
         </View>
 
-        {/* Footer */}
+        {/* 8. Existing-Account Creation Footer */}
         <View style={styles.footer}>
           <Text style={styles.footerText}>
             Don't have an account?{' '}
@@ -243,11 +246,11 @@ const styles = StyleSheet.create({
     borderColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 8,
+    marginTop: 6,
     marginBottom: 20,
   },
   header: {
-    marginBottom: 28,
+    marginBottom: 26,
   },
   title: {
     fontSize: 30,
@@ -255,22 +258,25 @@ const styles = StyleSheet.create({
     color: '#0F172A',
     letterSpacing: -0.5,
     marginBottom: 6,
+    textAlign: 'left',
   },
   subtitle: {
     fontSize: 15,
     color: '#64748B',
+    textAlign: 'left',
   },
   form: {
     width: '100%',
   },
   fieldGroup: {
-    marginBottom: 18,
+    marginBottom: 16,
   },
   label: {
     fontSize: 14,
     fontWeight: '600',
     color: '#1E293B',
     marginBottom: 8,
+    textAlign: 'left',
   },
   inputContainer: {
     flexDirection: 'row',
@@ -298,8 +304,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 4,
-    marginBottom: 28,
+    marginTop: 6,
+    marginBottom: 26,
   },
   checkboxRow: {
     flexDirection: 'row',
@@ -317,8 +323,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   checkboxActive: {
-    backgroundColor: '#A3E635',
-    borderColor: '#A3E635',
+    backgroundColor: PRIMARY_ORANGE,
+    borderColor: PRIMARY_ORANGE,
   },
   checkboxLabel: {
     fontSize: 13,
@@ -331,28 +337,28 @@ const styles = StyleSheet.create({
     color: '#0F172A',
   },
   primaryButton: {
-    backgroundColor: '#A3E635', // Vibrant lime green
+    backgroundColor: PRIMARY_ORANGE, // Established orange brand color
     height: 56,
-    borderRadius: 16,
+    borderRadius: 28, // Rounded pill shape matching reference
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#A3E635',
+    shadowColor: PRIMARY_ORANGE,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 2,
+    shadowOpacity: 0.28,
+    shadowRadius: 10,
+    elevation: 3,
   },
   buttonDisabled: {
-    opacity: 0.6,
+    opacity: 0.65,
   },
   primaryButtonText: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#0F172A',
+    color: '#FFFFFF', // High-contrast crisp white text
   },
   footer: {
     alignItems: 'center',
-    paddingVertical: 16,
+    paddingVertical: 18,
   },
   footerText: {
     fontSize: 14,

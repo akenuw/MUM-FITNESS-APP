@@ -7,28 +7,37 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Colors } from '@/constants/Colors';
+
+const PRIMARY_ORANGE = Colors.light.primary || '#FF7E45';
 
 export default function WelcomeScreen() {
   const insets = useSafeAreaInsets();
 
   return (
-    <View style={[styles.container, { paddingTop: Math.max(insets.top, 20), paddingBottom: Math.max(insets.bottom, 20) }]}>
-      {/* Header */}
+    <View
+      style={[
+        styles.container,
+        {
+          paddingTop: Math.max(insets.top, 24),
+          paddingBottom: Math.max(insets.bottom, 24),
+        },
+      ]}
+    >
+      {/* Top Header */}
       <View style={styles.header}>
         <Text style={styles.title}>Welcome</Text>
         <Text style={styles.subtitle}>Login or signup to continue</Text>
       </View>
 
-      {/* Empty Image Container (user will insert image later) */}
-      <View style={styles.imagePlaceholderContainer}>
-        <View style={styles.emptyImageFrame} />
-      </View>
+      {/* Visual breathing space reserved for future illustration */}
+      <View style={styles.imageSpacer} />
 
-      {/* Bottom Actions */}
+      {/* Bottom Action Buttons */}
       <View style={styles.actionSection}>
         <TouchableOpacity
           style={styles.primaryButton}
-          activeOpacity={0.85}
+          activeOpacity={0.88}
           onPress={() => router.push('/signup')}
         >
           <Text style={styles.primaryButtonText}>Create account</Text>
@@ -36,18 +45,10 @@ export default function WelcomeScreen() {
 
         <TouchableOpacity
           style={styles.secondaryButton}
-          activeOpacity={0.85}
+          activeOpacity={0.88}
           onPress={() => router.push('/login')}
         >
           <Text style={styles.secondaryButtonText}>Already have an account</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.guestLink}
-          activeOpacity={0.7}
-          onPress={() => router.replace('/(tabs)')}
-        >
-          <Text style={styles.guestLinkText}>Continue as a guest?</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -62,7 +63,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   header: {
-    marginTop: 10,
+    marginTop: 12,
   },
   title: {
     fontSize: 32,
@@ -70,54 +71,44 @@ const styles = StyleSheet.create({
     color: '#0F172A',
     letterSpacing: -0.5,
     marginBottom: 6,
+    textAlign: 'left',
   },
   subtitle: {
     fontSize: 15,
     color: '#64748B',
     fontWeight: '400',
+    textAlign: 'left',
   },
-  imagePlaceholderContainer: {
+  imageSpacer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginVertical: 20,
-  },
-  emptyImageFrame: {
-    width: '100%',
-    height: '90%',
-    maxHeight: 400,
-    borderRadius: 24,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1.5,
-    borderColor: '#F1F5F9',
-    borderStyle: 'dashed',
+    minHeight: 180,
   },
   actionSection: {
     width: '100%',
-    gap: 12,
-    marginBottom: 8,
+    gap: 14,
+    marginBottom: 6,
   },
   primaryButton: {
-    backgroundColor: '#A3E635', // Vibrant Lime Green from design
+    backgroundColor: PRIMARY_ORANGE, // Established orange brand color
     height: 56,
-    borderRadius: 16,
+    borderRadius: 28, // Rounded pill shape matching reference
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#A3E635',
+    shadowColor: PRIMARY_ORANGE,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 2,
+    shadowOpacity: 0.28,
+    shadowRadius: 10,
+    elevation: 3,
   },
   primaryButtonText: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#0F172A',
+    color: '#FFFFFF', // High-contrast crisp white text
   },
   secondaryButton: {
     backgroundColor: '#FFFFFF',
     height: 56,
-    borderRadius: 16,
+    borderRadius: 28,
     borderWidth: 1.5,
     borderColor: '#E2E8F0',
     alignItems: 'center',
@@ -127,15 +118,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#0F172A',
-  },
-  guestLink: {
-    alignItems: 'center',
-    paddingVertical: 8,
-    marginTop: 4,
-  },
-  guestLinkText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#475569',
   },
 });
