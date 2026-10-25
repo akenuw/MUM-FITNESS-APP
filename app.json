@@ -1,0 +1,56 @@
+{
+  "expo": {
+    "name": "FitTrack",
+    "slug": "fittrack",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "fittrack",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "owner": "fittrack",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.fittrack.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "edgeToEdgeEnabled": true,
+      "package": "com.fittrack.app"
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#FF7E45"
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "fittrack"
+      }
+    },
+    "androidNavigationBar": {
+      "backgroundColor": "#FF7E45"
+    }
+  }
+}
