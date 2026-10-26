@@ -94,8 +94,22 @@ export function VerificationScreen() {
     try {
       await authService.verifySignupOtp(email, code);
 
-      // Session stored on device -> Straight to the app!
-      router.replace('/(tabs)');
+      // Check if user has already completed Personal Data setup
+      try {
+        const profile = await profileService.getProfile();
+        if (
+          profile &&
+          (profile.fitnessLevel ||
+            profile.weight ||
+            (profile.fitnessGoals && profile.fitnessGoals.length > 0))
+        ) {
+          router.replace('/(tabs)');
+        } else {
+          router.replace('/profile-setup');
+        }
+      } catch {
+        router.replace('/profile-setup');
+      }
     } catch (error: any) {
       console.error('Verification error:', error);
       Alert.alert(

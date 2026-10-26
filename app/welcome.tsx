@@ -6,7 +6,6 @@ import {
   Platform,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -17,7 +16,6 @@ import {
   BrainDiagnosticCard,
   TactilePressable,
 } from '@/components/AuthComponents';
-import Storage from '@/utils/storage';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -28,18 +26,13 @@ const COLOR_SUBTITLE = '#7C808B';
 export default function WelcomeScreen() {
   const insets = useSafeAreaInsets();
 
-  const handleContinueAsGuest = () => {
-    Storage.set('authToken', 'guest_session_' + Date.now());
-    router.replace('/(tabs)');
-  };
-
   return (
     <View
       style={[
         styles.container,
         {
           paddingTop: Math.max(insets.top, 16),
-          paddingBottom: Math.max(insets.bottom, 12),
+          paddingBottom: Math.max(insets.bottom, 20),
         },
       ]}
     >
@@ -59,20 +52,15 @@ export default function WelcomeScreen() {
         />
 
         {/* 3 Glowing Biometric Hotspots with Breathing Pulse */}
-        {/* Hotspot 1: Forehead / Brain Cortex */}
         <BiometricHotspot top="18%" left="37%" />
-
-        {/* Hotspot 2: Left Chest / Heart */}
         <BiometricHotspot top="33%" left="42%" />
-
-        {/* Hotspot 3: Lower Abdomen / Liver */}
         <BiometricHotspot top="49%" left="44%" />
 
         {/* Floating "Brain MRI" Diagnostic Card */}
         <BrainDiagnosticCard />
       </View>
 
-      {/* 3. Bottom Action Sheet Container */}
+      {/* 3. Bottom Action Sheet Container (No Guest Mode) */}
       <Animated.View
         entering={FadeInDown.duration(450).delay(100)}
         style={styles.bottomCardWrapper}
@@ -94,17 +82,6 @@ export default function WelcomeScreen() {
             <Text style={styles.secondaryButtonText}>Already have an account</Text>
           </TactilePressable>
         </View>
-
-        {/* Guest Mode Footer Link */}
-        <TouchableOpacity
-          style={styles.guestLinkRow}
-          activeOpacity={0.7}
-          onPress={handleContinueAsGuest}
-        >
-          <Text style={styles.guestTextRegular}>
-            Continue as a <Text style={styles.guestTextBold}>guest?</Text>
-          </Text>
-        </TouchableOpacity>
       </Animated.View>
     </View>
   );
@@ -149,7 +126,7 @@ const styles = StyleSheet.create({
   bottomCardWrapper: {
     width: '100%',
     paddingHorizontal: 16,
-    paddingBottom: 4,
+    paddingBottom: 8,
   },
   bottomActionCard: {
     backgroundColor: '#FFF9F5',
@@ -206,21 +183,6 @@ const styles = StyleSheet.create({
   secondaryButtonText: {
     fontSize: 15,
     fontWeight: '500',
-    color: COLOR_TITLE,
-  },
-  guestLinkRow: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-  },
-  guestTextRegular: {
-    fontSize: 13,
-    color: COLOR_SUBTITLE,
-    fontWeight: '400',
-  },
-  guestTextBold: {
-    fontSize: 13,
-    fontWeight: '700',
     color: COLOR_TITLE,
   },
 });
